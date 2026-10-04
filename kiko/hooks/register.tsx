@@ -3,7 +3,8 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { KikoRecord, Round } from '../types'
 import {
-  EMPTY_RECORD, IDLE, applyUsage, beatFor, classifyTool, isKikoRecord, koLine, opponentName, recordLine, updateRecord,
+  EMPTY_RECORD, IDLE, applyUsage, beatFor, classifyTool, isKikoRecord, koLine, oneLine, opponentName, recordLine,
+  spinnerKind, spinnerWord, statsText, updateRecord,
 } from './round'
 import type { Usage } from './round'
 
@@ -13,9 +14,6 @@ const enabled = atom({ plugin: 'kiko', key: 'enabled' } as const, true)
 const RECORD_KEY = 'kiko:record'
 const ENABLED_KEY = 'kiko:enabled'
 const KO_CARD_MS = 5_000
-
-// The pending end of a K.O. card. A reload cancels the module's timers anyway.
-let koTimer: { cancel: () => void } | undefined
 
 const isSub = (e: unknown) => Boolean((e as { agentId?: string }).agentId)
 
@@ -27,7 +25,6 @@ async function loadRecord($: EngineInterface): Promise<KikoRecord> {
 async function startRound($: EngineInterface, text: string, turnId: string): Promise<void> {
   const current = (await read($, round)) ?? IDLE
   if (current.phase === 'fight') return
-  koTimer?.cancel()
   const rec = await loadRecord($)
   const now = await $.clock.now()
   await update($, round, r => {
@@ -57,15 +54,41 @@ async function finishRound($: EngineInterface, e: { turnId: string; reason: stri
   }
   const rec = updateRecord(await loadRecord($), { ms: e.durationMs, tokens: r.tokensIn + r.tokensOut, opponent: r.opponent })
   await $.store.set(RECORD_KEY, rec)
-  const done: Round = { ...r, phase: 'ko', endedAt: r.startedAt + e.durationMs, record: recordLine(rec), status: 'K.O.!' }
+  const done: Round = { ...r, phase: 'ko', endedAt: await $.clock.now(), record: recordLine(rec), status: 'K.O.!' }
   await update($, round, () => done)
   if ((await read($, enabled)) ?? true) {
     await $.session.append({ message: { type: 'system', content: [{ type: 'text', text: koLine(done, rec) }] } }).catch(() => undefined)
   }
-  koTimer?.cancel()
-  koTimer = $.clock.after(KO_CARD_MS, () => {
-    void update($, round, x => (x && x.phase === 'ko' && x.turnId === e.turnId ? { ...x, phase: 'idle' } : x ?? IDLE))
-  })
+}
+
+// Timers only outlive the dispatch that starts them from session.start, so the K.O. card
+// is cleared by a sweep started there rather than a timer set at the K.O.
+async function sweepKo($: EngineInterface): Promise<void> {
+  const r = await read($, round)
+  if (!r || r.phase !== 'ko' || r.endedAt === null) return
+  if ((await $.clock.now()) - r.endedAt < KO_CARD_MS) return
+  await update($, round, x => (x && x.phase === 'ko' && x.endedAt === r.endedAt ? { ...x, phase: 'idle' } : x ?? IDLE))
+}
+
+async function setEnabled($: EngineInterface, value: boolean): Promise<void> {
+  await update($, enabled, () => value)
+  await $.store.set(ENABLED_KEY, value)
+}
+
+async function kikoCommand($: EngineInterface, args: string): Promise<string> {
+  const word = args.trim().toLowerCase()
+  if (word === 'on') {
+    await setEnabled($, true)
+    return 'Kiko is on. Ding ding!'
+  }
+  if (word === 'off') {
+    await setEnabled($, false)
+    return 'Kiko is off. The record still counts; /kiko on to bring Kiko back.'
+  }
+  const rec = await loadRecord($)
+  if (word === 'stats') return statsText(rec)
+  if (word === '') return `Kiko is ${((await read($, enabled)) ?? true) ? 'on' : 'off'} · ${recordLine(rec)}. Try /kiko stats, /kiko off.`
+  return 'Usage: /kiko on, /kiko off, /kiko stats'
 }
 
 export const register: Register = on => {
@@ -76,6 +99,7 @@ export const register: Register = on => {
       await update($, enabled, () => saved !== false)
       const rec = await loadRecord($)
       await update($, round, r => ({ ...IDLE, n: r?.n ?? 0, seq: r?.seq ?? 0, record: recordLine(rec) }))
+      $.clock.every(500, () => void sweepKo($).catch(() => undefined))
     } catch {
       // Kiko never stops a session from starting.
     }
@@ -152,5 +176,29 @@ export const register: Register = on => {
       }
     }
     return result
+  })
+
+  on('command.run', { command: 'kiko' }, async ($, e) => ({ text: await kikoCommand($, e.args ?? '') }))
+
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    const isOn = (await read($, enabled)) ?? true
+    const r = (await read($, round)) ?? IDLE
+    if (!isOn || r.phase === 'idle' || e.props.hasSurvey) return next(e)
+    const els = $.ui.resolve(e)
+    const columns = Math.max(20, e.props.bodyColumns)
+    // The terminal and desktop draw a Client; other tables list one that draws nothing.
+    if ((e.surface === 'terminal' || e.surface === 'desktop') && 'Client' in els) {
+      const { Client } = els
+      return <Client key="kiko" module="./kiko.tsx" props={{ ...r, columns, maxRows: e.props.maxRows }} />
+    }
+    const { Text } = els
+    return <Text>{oneLine(r)}</Text>
+  })
+
+  on('ui.render', { component: 'Spinner' }, async ($, e, next) => {
+    const isOn = (await read($, enabled)) ?? true
+    const r = (await read($, round)) ?? IDLE
+    if (!isOn || r.phase !== 'fight' || e.props.message) return next(e)
+    return next({ ...e, props: { ...e.props, word: spinnerWord(spinnerKind(e.props.mode, r), r.n) } })
   })
 }

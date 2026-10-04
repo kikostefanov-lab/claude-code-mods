@@ -43,6 +43,7 @@ describe('fight', () => {
     expect(fake.store.get('kiko:record')).toMatchObject({ wins: 1, streak: 1, recent: ['THE FLAKY AUTH TEST'] })
 
     await fake.clock.advance(5_000)
+    await fake.clock.settle()
     expect(await roundOf($)).toBeUndefined()
   })
 

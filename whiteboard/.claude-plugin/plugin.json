@@ -1,0 +1,14 @@
+{
+  "name": "whiteboard",
+  "version": "0.1.0",
+  "description": "Claude draws Mermaid diagrams (UML, flowcharts, sequences) into a side pane with history, export and copy.",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "mmdcPath": {
+      "type": "string",
+      "title": "mmdc path",
+      "description": "Absolute path to mermaid-cli's mmdc. Leave empty to find it through your login shell.",
+      "default": ""
+    }
+  }
+}

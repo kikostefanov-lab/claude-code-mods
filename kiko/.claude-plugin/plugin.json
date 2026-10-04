@@ -1,0 +1,9 @@
+{
+  "name": "kiko",
+  "version": "0.1.0",
+  "description": "Kiko boxes every turn above your prompt: Knowledge In, Knowledge Out, K.O.!",
+  "author": { "name": "Kiko Stefanov", "url": "https://github.com/kikostefanov-lab" },
+  "repository": "https://github.com/kikostefanov-lab/claude-code-mods",
+  "license": "MIT",
+  "types": "./types/index.d.ts"
+}

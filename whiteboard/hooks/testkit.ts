@@ -1,4 +1,6 @@
-// Test-kit probe findings (Task 1): A state=native, B tool.register=native, C op stubs return { value }
+// Test-kit findings: state is native; tool.call and command.run reach the plugin's hooks;
+// tool.register and command.register have no implementation (stubbed here); an op stub
+// answers { value } or { deny } (a stub that throws is skipped, not rejected).
 import type { On } from 'claude-code'
 import { mock } from 'claude-code/testing'
 
@@ -15,6 +17,7 @@ export type Fake = {
   copies: string[]
   opens: string[]
   panes: string[]
+  registered: string[]
   mode: MmdcMode
   svg: string
   placePane: boolean
@@ -27,7 +30,7 @@ const ran = (stdout: string, exitCode = 0, stderr = '') =>
 export function fakeHost(on: On): Fake {
   const fake: Fake = {
     files: new Map([[MMDC, '#!/usr/bin/env node']]),
-    runs: [], toasts: [], copies: [], opens: [], panes: [],
+    runs: [], toasts: [], copies: [], opens: [], panes: [], registered: [],
     mode: 'ok', svg: SVG_OK, placePane: true,
   }
   mock.clock(on, { now: 1_760_000_000_000 })
@@ -35,6 +38,8 @@ export function fakeHost(on: On): Fake {
 
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   on('session.id', () => v('sess-1'))
+  on('tool.register', ($, e) => { fake.registered.push(`tool:${e.name}`); return v({ tool: `mcp__whiteboard__${e.name}` }) })
+  on('command.register', ($, e) => { fake.registered.push(`command:${e.name}`); return v(undefined) })
 
   on('fs.exists', ($, e) => v(
     (fake.mode !== 'missing' || e.path !== MMDC) &&
@@ -43,12 +48,11 @@ export function fakeHost(on: On): Fake {
   on('fs.write', ($, e) => { fake.files.set(e.path, e.text); return v(undefined) })
   on('fs.read', ($, e) => {
     const text = fake.files.get(e.path)
-    if (text === undefined) throw new Error(`ENOENT: ${e.path}`)
-    return v(text)
+    return text === undefined ? { deny: `ENOENT: ${e.path}` } : v(text)
   })
   on('fs.stat', ($, e) => {
     const text = fake.files.get(e.path)
-    if (text === undefined) throw new Error(`ENOENT: ${e.path}`)
+    if (text === undefined) return { deny: `ENOENT: ${e.path}` }
     return v({ kind: 'file' as const, size: text.length, mtimeMs: 0, isLink: false })
   })
   on('fs.list', ($, e) => v([...fake.files.keys()]
@@ -60,7 +64,7 @@ export function fakeHost(on: On): Fake {
     fake.runs.push(argv)
     if (argv[0] === '/bin/zsh') return v(ran(`${MMDC}\n`))
     if (argv[0] === 'open') { fake.opens.push(argv[1]!); return v(ran('')) }
-    if (fake.mode === 'timeout') throw new Error('process timed out after 20000 ms')
+    if (fake.mode === 'timeout') return { deny: 'process timed out after 20000 ms' }
     if (fake.mode === 'syntax') {
       return v(ran('', 1, "Error: Parse error on line 2:\n...A-->>\n------^\nExpecting 'TXT', got 'NEWLINE'"))
     }

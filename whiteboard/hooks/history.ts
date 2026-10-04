@@ -34,3 +34,19 @@ export function slug(title: string): string {
     .replace(/-+$/, '')
   return s || 'diagram'
 }
+
+export function jumpTo(h: History, index: number): History {
+  if (index < 0 || index >= h.entries.length || index === h.index) return h
+  return { ...h, index }
+}
+
+export function dropped(before: History, after: History): Entry[] {
+  const kept = new Set(after.entries.map(e => e.id))
+  return before.entries.filter(e => !kept.has(e.id))
+}
+
+export function isHistory(value: unknown): value is History {
+  const h = value as History | undefined
+  return Boolean(h) && Array.isArray(h!.entries) && typeof h!.index === 'number' &&
+    h!.entries.every(e => typeof e?.id === 'string' && typeof e.title === 'string' && typeof e.source === 'string' && typeof e.svgPath === 'string')
+}

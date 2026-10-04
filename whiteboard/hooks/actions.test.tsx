@@ -1,21 +1,10 @@
 import { describe, expect, test } from 'claude-code/testing'
 
 import { MARKDOWN_LIMIT, cleanTitle, freeName, mermaidBlock, sourceView } from './actions'
-import { fakeHost, startSession } from './testkit'
+import { drawCall as draw, fakeHost, mountPane as mount, startSession } from './testkit'
 
-const PROPS = {
-  title: 'Whiteboard', isFocused: true, bodyColumns: 80, placement: 'dock' as const,
-  scroll: { offset: 0, bodyRows: 40 }, view: {},
-}
-const mount = ($: any, surface: 'terminal' | 'desktop') =>
-  $.ui.mount({
-    plugin: 'whiteboard', surface, component: 'Pane', requestId: 'whiteboard', props: PROPS,
-    viewport: { columns: 160, rows: 50, isFullscreen: true },
-  })
-const draw = ($: any, title: string, mermaid: string) =>
-  $.tool.call({ tool: 'mcp__whiteboard__draw', title, mermaid } as never)
 const svgPathOf = (files: Map<string, string>) =>
-  [...files.keys()].find(k => k.startsWith('/tmp/claude-whiteboard/') && k.endsWith('.svg'))!
+  [...files.keys()].find(k => k.includes('/.claude/whiteboard/') && k.endsWith('.svg'))!
 const MISSING_NOTE = { type: 'Text', text: /Render missing/ }
 
 describe('actions', () => {
@@ -100,7 +89,7 @@ describe('actions', () => {
     await draw($, '../../etc/passwd', 'graph TD; A-->B')
     const ui = await mount($, 'terminal')
     await ui.press({ key: 'export' })
-    const written = [...fake.files.keys()].filter(k => !k.startsWith('/tmp/') && k !== '/fake/bin/mmdc')
+    const written = [...fake.files.keys()].filter(k => k.startsWith('/work/'))
     expect(written).toEqual(['/work/diagrams/etc-passwd.mmd', '/work/diagrams/etc-passwd.svg'])
     await ui.unmount()
   })
@@ -112,7 +101,7 @@ describe('actions', () => {
     const ui = await mount($, 'desktop')
     await ui.press({ key: 'copy' })
     expect(fake.copies).toEqual(['graph TD; A-->B'])
-    expect(fake.toasts.at(-1)).toBe('Copied the Mermaid source.')
+    expect(fake.toasts.at(-1)).toBe('Copied the diagram source.')
     await ui.unmount()
   })
 

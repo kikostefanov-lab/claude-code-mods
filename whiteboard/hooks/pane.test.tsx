@@ -1,21 +1,10 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-import { fakeHost, startSession } from './testkit'
+import { drawCall as draw, fakeHost, mountPane as mount, startSession } from './testkit'
 
 const SURFACES = ['terminal', 'desktop'] as const
-const PROPS = {
-  title: 'Whiteboard', isFocused: true, bodyColumns: 80, placement: 'dock' as const,
-  scroll: { offset: 0, bodyRows: 40 }, view: {},
-}
-const mount = ($: any, surface: (typeof SURFACES)[number] | 'vscode') =>
-  $.ui.mount({
-    plugin: 'whiteboard', surface, component: 'Pane', requestId: 'whiteboard', props: PROPS,
-    viewport: { columns: 160, rows: 50, isFullscreen: true },
-  })
 const POSITION = { type: 'Text', text: /^\d+\/\d+$/ }
 const titleIs = async (ui: any, title: string) => (await ui.findAll({ type: 'Text' })).some((t: any) => t.text === title)
-const draw = ($: any, title: string, mermaid: string) =>
-  $.tool.call({ tool: 'mcp__whiteboard__draw', title, mermaid } as never)
 
 describe('pane', () => {
   test('empty state', async ($, on) => {
@@ -40,6 +29,16 @@ describe('pane', () => {
     expect((await term.find({ type: 'Markdown' }))?.text).toContain('graph TD; A-->B')
     expect(await term.find({ type: 'Svg' })).toBeUndefined()
     await term.unmount()
+  })
+
+  test('mobile draws the SVG and no text field', async ($, on) => {
+    fakeHost(on)
+    await startSession($)
+    await draw($, 'Flow', 'graph TD; A-->B')
+    const ui = await mount($, 'mobile')
+    expect(await ui.find({ type: 'Svg' })).toBeDefined()
+    expect(await ui.find({ type: 'Input' })).toBeUndefined()
+    await ui.unmount()
   })
 
   test('prev/next walk history and clamp', async ($, on) => {

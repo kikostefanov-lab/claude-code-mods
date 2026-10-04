@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'claude-code/testing'
 
 import type { Entry } from '../types'
-import { EMPTY, MAX_ENTRIES, add, current, replace, slug, step } from './history'
+import { EMPTY, MAX_ENTRIES, add, current, dropped, isHistory, jumpTo, replace, slug, step } from './history'
 
 const entry = (id: string): Entry => ({
   id, title: `T${id}`, source: 'graph TD; A-->B', svgPath: `/t/${id}.svg`, svgBytes: 10, createdAt: 0,
@@ -50,5 +50,26 @@ describe('history', () => {
     expect(slug('x'.repeat(200))).toHaveLength(60)
     expect(slug('a '.repeat(40))).toMatch(/^[a-z0-9-]+$/)
     expect(slug('a '.repeat(40)).endsWith('-')).toBe(false)
+  })
+})
+
+describe('history (0.2)', () => {
+  test('jumpTo moves within range only', () => {
+    const h = add(add(EMPTY, entry('a')), entry('b'))
+    expect(jumpTo(h, 0).index).toBe(0)
+    expect(jumpTo(h, 5)).toBe(h)
+    expect(jumpTo(h, -1)).toBe(h)
+  })
+
+  test('dropped lists entries the cap pushed out', () => {
+    let h = EMPTY
+    for (let i = 0; i < MAX_ENTRIES; i++) h = add(h, entry(String(i)))
+    expect(dropped(h, add(h, entry('new'))).map(e => e.id)).toEqual(['0'])
+  })
+
+  test('isHistory', () => {
+    expect(isHistory(add(EMPTY, entry('a')))).toBe(true)
+    expect(isHistory({ entries: [{ id: 1 }], index: 0 })).toBe(false)
+    expect(isHistory(undefined)).toBe(false)
   })
 })

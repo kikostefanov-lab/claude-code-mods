@@ -1,13 +1,29 @@
 {
   "name": "whiteboard",
-  "version": "0.1.0",
-  "description": "Claude draws Mermaid diagrams (UML, flowcharts, sequences) into a side pane with history, export and copy.",
+  "version": "0.2.0",
+  "description": "Claude draws Mermaid, D2 and PlantUML diagrams (UML, flowcharts, sequences, architecture) into a side pane with history, versions, export, copy and share.",
+  "author": { "name": "Kiko Stefanov", "url": "https://github.com/kikostefanov-lab" },
+  "repository": "https://github.com/kikostefanov-lab/claude-code-mods",
+  "license": "MIT",
   "types": "./types/index.d.ts",
   "userConfig": {
     "mmdcPath": {
       "type": "string",
       "title": "mmdc path",
-      "description": "Absolute path to mermaid-cli's mmdc. Leave empty to find it through your login shell.",
+      "description": "Absolute path to mermaid-cli's mmdc. Leave empty to find it automatically.",
+      "default": ""
+    },
+    "theme": {
+      "type": "string",
+      "title": "Diagram theme",
+      "description": "Theme for rendered diagrams.",
+      "options": ["default", "neutral", "dark", "forest"],
+      "default": "default"
+    },
+    "mermaidConfig": {
+      "type": "string",
+      "title": "Mermaid config file",
+      "description": "Absolute path to a Mermaid JSON config (team colours, fonts). Leave empty for none.",
       "default": ""
     }
   }

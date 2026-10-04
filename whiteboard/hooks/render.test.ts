@@ -38,6 +38,25 @@ describe('render', () => {
     expect(failureOf({ exitCode: 1, stderr: 'x'.repeat(5000), stdout: '' }).message).toHaveLength(2000)
   })
 
+  test('failureOf keeps the parse message and drops the stack trace', () => {
+    const stderr = [
+      'Error: Parse error on line 3:',
+      '...instorm  Claude-->>  Claude->>You: spe',
+      '----------------------^',
+      "Expecting 'link', '+', '-', '()', 'ACTOR', got 'NEWLINE'",
+      'Parser.parseError (https://mermaid-cli-intercept.invalid/x/sequenceDiagram-65RTROUO.mjs:410:21)',
+      'Parser.parse (https://mermaid-cli-intercept.invalid/x/sequenceDiagram-65RTROUO.mjs:482:16)',
+      '    at #evaluate (file:///x/puppeteer-core/lib/puppeteer/cdp/ExecutionContext.js:402:19)',
+      '    at async ExecutionContext.evaluate (file:///x/ExecutionContext.js:288:16)',
+    ].join('\n')
+    expect(failureOf({ exitCode: 1, stderr, stdout: '' }).message).toBe([
+      'Error: Parse error on line 3:',
+      '...instorm  Claude-->>  Claude->>You: spe',
+      '----------------------^',
+      "Expecting 'link', '+', '-', '()', 'ACTOR', got 'NEWLINE'",
+    ].join('\n'))
+  })
+
   test('rejectionOf tells a timeout from a launch failure', () => {
     expect(rejectionOf(new Error('process timed out after 20000 ms'))).toMatchObject({ kind: 'timeout', message: expect.stringContaining('longer than 20s') })
     expect(rejectionOf(new Error('spawn EACCES'))).toEqual({ ok: false, kind: 'failed', message: 'mmdc could not run: spawn EACCES' })

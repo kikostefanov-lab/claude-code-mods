@@ -6,6 +6,10 @@ export const MAX_INLINE_SVG = 131_072
 export const MISSING_HINT =
   'mmdc (mermaid-cli) was not found. Install it with `npm i -g @mermaid-js/mermaid-cli`, or set the whiteboard plugin option `mmdcPath` to its absolute path.'
 
+// A frame of the stack mmdc prints after the message: `    at fn (file:...)`
+// or mermaid's own `Parser.parse (https://...)`.
+const STACK_FRAME = /^\s+at\s|^[\w.$#]+ \((?:https?|file):\/\//
+
 const PARSE_ERROR = /Parse error|Syntax error|Lexical error|No diagram type detected|UnknownDiagramError/i
 
 export type RenderFailure = { ok: false; kind: 'syntax' | 'missing' | 'timeout' | 'failed'; message: string }
@@ -39,7 +43,9 @@ export function mmdcEnv(mmdcPath: string, path: string | undefined, home: string
 }
 
 export function failureOf(run: { exitCode: number; stderr: string; stdout: string }): RenderFailure {
-  const text = (run.stderr || run.stdout).trim().slice(0, 2000)
+  const lines = (run.stderr || run.stdout).trim().split('\n')
+  const firstFrame = lines.findIndex(line => STACK_FRAME.test(line))
+  const text = (firstFrame === -1 ? lines : lines.slice(0, firstFrame)).join('\n').trim().slice(0, 2000)
   return {
     ok: false,
     kind: PARSE_ERROR.test(text) ? 'syntax' : 'failed',

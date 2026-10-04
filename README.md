@@ -114,14 +114,13 @@ whiteboard/
 
 ```bash
 claude plugin validate whiteboard   # what the engine will load, call and refuse
-claude plugin test whiteboard       # 39 tests, terminal + desktop surfaces
+claude plugin test whiteboard       # 40 tests, terminal + desktop surfaces
 whiteboard/scripts/smoke-mmdc.sh    # real mmdc: renders, size limit, syntax errors
 ```
 
 ### Known limitations
 
 - Mermaid's state-diagram grammar is lenient: some typos render as odd states instead of failing.
-- Syntax errors come back with mmdc's stack trace attached, not just the parse message.
 - No inline image in kitty / Ghostty yet (the terminal shows source + Open).
 
 ---

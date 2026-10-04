@@ -29,21 +29,8 @@ export function fakeHost(on: On, store: Record<string, unknown> = {}): Fake {
   return fake
 }
 
-// The test's own registrar can't hook session.append, so an inline plugin records each
-// notice into the fake store and declines to store the row.
-export const NOTICES = {
-  name: 'notices',
-  register(on: any) {
-    on('session.append', async ($: any, e: any) => {
-      const prev = ((await $.store.get('test:notices')) as string[] | undefined) ?? []
-      await $.store.set('test:notices', [...prev, e.message.content[0]?.text ?? ''])
-      return { deny: 'recorded by the test' }
-    })
-  },
-}
-
-export const noticesOf = (fake: Fake) => (fake.store.get('test:notices') as string[] | undefined) ?? []
-
+// The K.O. notice goes through $.session.append, which this CLI's test runner (2.1.284) can't
+// hook or observe; koLine's own test covers the text and the live check covers the append.
 export async function startSession($: any): Promise<void> {
   await $.session.start({ cwd: '/work', surface: 'desktop', isInteractive: true })
 }

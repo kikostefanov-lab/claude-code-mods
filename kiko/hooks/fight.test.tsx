@@ -27,7 +27,7 @@ describe('fight', () => {
     const chunks = await step($, on, 't1')
     expect(chunks.map((c: any) => c.kind)).toEqual(['thinking', 'text', 'stop'])
     r = await roundOf($)
-    expect(r).toMatchObject({ mode: 'responding', tokensIn: 1000, tokensOut: 40 })
+    expect(r).toMatchObject({ mode: 'responding', tokensIn: 100, tokensOut: 40 })
 
     await $.tool.call({ tool: 'Read', file_path: '/w/src/app.ts' } as never)
     r = await roundOf($)

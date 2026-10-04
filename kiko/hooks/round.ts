@@ -1,4 +1,7 @@
 import type { BeatKind, KikoRecord, Mode, Round } from '../types'
+import { fmtTokens, mmss } from './kiko'
+
+export { fmtTokens, mmss }
 
 export const IDLE: Round = {
   phase: 'idle', n: 0, turnId: null, opponent: '', startedAt: 0, endedAt: null, mode: 'requesting', status: '',
@@ -9,7 +12,8 @@ export const EMPTY_RECORD: KikoRecord = { wins: 0, streak: 0, bestStreak: 0, fas
 
 const STOP = new Set(`a an and are as at be by can could do does fix for from help how i in into is it its just let lets me
   my need now of on or our please should show so some tell than that the then this to up us want was we what when why will
-  with would you your make add build create write update change look check new get set run see find`.split(/\s+/))
+  with would you your make add build create write update change look check new get set run see find think about
+  makes give me tell explain`.split(/\s+/))
 
 const NAME_MAX = 28
 
@@ -71,7 +75,8 @@ export type Usage = { input_tokens: number; output_tokens: number; cache_read_in
 export function applyUsage(round: Round, usage: Usage): Round {
   return {
     ...round,
-    tokensIn: round.tokensIn + usage.input_tokens + usage.cache_read_input_tokens + usage.cache_creation_input_tokens,
+    // Cache reads are the conversation re-read, not new knowledge.
+    tokensIn: round.tokensIn + usage.input_tokens + usage.cache_creation_input_tokens,
     tokensOut: round.tokensOut + usage.output_tokens,
   }
 }
@@ -94,16 +99,7 @@ export function isKikoRecord(v: unknown): v is KikoRecord {
     typeof r!.biggestTokens === 'number' && Array.isArray(r!.recent)
 }
 
-export function mmss(ms: number): string {
-  const s = Math.max(0, Math.floor(ms / 1000))
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
-}
 
-export function fmtTokens(n: number): string {
-  if (n < 1000) return String(n)
-  if (n < 1_000_000) return `${(n / 1000).toFixed(1)}k`
-  return `${(n / 1_000_000).toFixed(1)}M`
-}
 
 export function recordLine(rec: KikoRecord): string {
   return `${rec.wins}-0 | streak ${rec.streak}`

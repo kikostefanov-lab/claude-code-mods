@@ -12,6 +12,7 @@ describe('round', () => {
     expect(opponentName('fix the flaky auth test please')).toBe('THE FLAKY AUTH TEST')
     expect(opponentName('Can you refactor the Payment Service?')).toBe('THE REFACTOR PAYMENT SERVICE')
     expect(opponentName('Café menu broken')).toBe('THE CAFE MENU BROKEN')
+    expect(opponentName('Think about what makes a good boxing nickname, then give me three')).toBe('THE GOOD BOXING NICKNAME')
     expect(opponentName('`x()` ??')).toBe('THE UNKNOWN BUG')
     expect(opponentName('')).toBe('THE UNKNOWN BUG')
     expect(opponentName('supercalifragilistic expialidocious antidisestablishmentarianism').length).toBeLessThanOrEqual(28)
@@ -39,7 +40,8 @@ describe('round', () => {
 
   test('applyUsage adds a step', () => {
     const u = { input_tokens: 100, output_tokens: 50, cache_read_input_tokens: 1000, cache_creation_input_tokens: 10, model: 'm' }
-    expect(applyUsage(IDLE, u)).toMatchObject({ tokensIn: 1110, tokensOut: 50 })
+    // Cache reads are the conversation re-read, not new knowledge: KI counts what's new.
+    expect(applyUsage(IDLE, u)).toMatchObject({ tokensIn: 110, tokensOut: 50 })
   })
 
   test('updateRecord', () => {

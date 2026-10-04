@@ -38,6 +38,7 @@ export function fakeHost(on: On): Fake {
 
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   on('session.id', () => v('sess-1'))
+  on('session.cwd', () => v('/work'))
   on('tool.register', ($, e) => { fake.registered.push(`tool:${e.name}`); return v({ tool: `mcp__whiteboard__${e.name}` }) })
   on('command.register', ($, e) => { fake.registered.push(`command:${e.name}`); return v(undefined) })
 

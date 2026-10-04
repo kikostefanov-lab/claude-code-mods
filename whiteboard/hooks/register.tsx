@@ -1,9 +1,9 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register } from 'claude-code'
+import type { EngineInterface, Register, RenderSurface } from 'claude-code'
 
 import type { Entry } from '../types'
-import { mermaidBlock } from './actions'
-import { EMPTY, add, current, step } from './history'
+import { freeName, mermaidBlock } from './actions'
+import { EMPTY, add, current, replace, slug, step } from './history'
 import {
   MAX_INLINE_SVG, MISSING_HINT, RENDER_TIMEOUT_MS, boardDirFrom, failureOf, locatedPath, mmdcArgv, mmdcEnv,
   rejectionOf, stripFences,
@@ -37,6 +37,8 @@ const INPUT_SCHEMA = {
   required: ['title', 'mermaid'],
   additionalProperties: false,
 }
+
+const EXPORT_DIR = 'diagrams'
 
 const EMPTY_HINT =
   'Claude draws here when a diagram would help: ask for a sequence, class, state or ER diagram, a flowchart or an architecture sketch.'
@@ -86,6 +88,38 @@ async function mmdcFor($: EngineInterface, configured: string): Promise<string |
   const found = await locateMmdc($)
   if (found) await update($, mmdcPath, () => found)
   return found
+}
+
+async function exportEntry($: EngineInterface, entry: Entry): Promise<string> {
+  const dir = `${await $.session.cwd()}/${EXPORT_DIR}`
+  const taken = new Set((await $.fs.exists(dir)) ? (await $.fs.list(dir)).map(f => f.name) : [])
+  const base = freeName(taken, slug(entry.title))
+  const shown = `${EXPORT_DIR}/${base}`
+  const svg = await $.fs.read(entry.svgPath).catch(() => undefined)
+  await $.fs.write(`${dir}/${base}.mmd`, `${entry.source}\n`)
+  if (svg === undefined) return `Exported ${shown}.mmd (SVG missing: press Re-render, then export again).`
+  await $.fs.write(`${dir}/${base}.svg`, svg)
+  return `Exported ${shown}.mmd and ${shown}.svg`
+}
+
+async function copyEntry($: EngineInterface, entry: Entry, surface: RenderSurface): Promise<string> {
+  const r = await $.ui.copy({ text: entry.source, surface })
+  return r.isCopied ? 'Copied the Mermaid source.' : `Could not copy: ${r.reason}`
+}
+
+async function openEntry($: EngineInterface, entry: Entry): Promise<string | undefined> {
+  if (!(await $.fs.exists(entry.svgPath))) return 'Render missing: press Re-render first.'
+  const r = await $.process.run(['open', entry.svgPath], { timeoutMs: 5_000 }).catch(() => undefined)
+  return r && r.exitCode === 0 ? undefined : 'Could not open the SVG.'
+}
+
+async function rerender($: EngineInterface, entry: Entry, configured: string): Promise<void> {
+  const out = await renderMermaid($, { source: entry.source, dir: await boardDir($), id: entry.id, mmdcPath: await mmdcFor($, configured) })
+  if (!out.ok) {
+    $.ui.toast(`Re-render failed: ${out.message.split('\n')[0]}`)
+    return
+  }
+  await update($, history, list => replace(list ?? EMPTY, { ...entry, svgPath: out.svgPath, svgBytes: out.svgBytes }))
 }
 
 export const register: Register = (on, options) => {
@@ -162,14 +196,17 @@ export const register: Register = (on, options) => {
           <Button key="next" hotkey="l" plain label="▶" dimColor={board.index >= board.entries.length - 1}
             onPress={() => update($, history, x => step(x ?? EMPTY, 1))} />
           <Text bold>{entry.title}</Text>
-          <Button key="export" label="Export" onPress={() => undefined} />
-          <Button key="copy" label="Copy" onPress={() => undefined} />
-          <Button key="open" hotkey="o" label="Open" onPress={() => undefined} />
+          <Button key="export" label="Export" onPress={async () => $.ui.toast(await exportEntry($, entry))} />
+          <Button key="copy" label="Copy" onPress={async p => $.ui.toast(await copyEntry($, entry, p.surface))} />
+          <Button key="open" hotkey="o" label="Open" onPress={async () => {
+            const problem = await openEntry($, entry)
+            if (problem) $.ui.toast(problem)
+          }} />
         </Box>
         {note ? (
           <Box flexDirection="row" gap={1}>
             <Text dimColor>{note}</Text>
-            {isMissing ? <Button key="rerender" label="Re-render" onPress={() => undefined} /> : null}
+            {isMissing ? <Button key="rerender" label="Re-render" onPress={() => rerender($, entry, configured)} /> : null}
           </Box>
         ) : null}
         {Svg && svg !== undefined

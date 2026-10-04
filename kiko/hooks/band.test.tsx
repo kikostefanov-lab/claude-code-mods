@@ -18,7 +18,7 @@ describe('band, spinner and /kiko', () => {
     fakeHost(on)
     await startSession($)
     const band = await mountBand($)
-    expect(await band.find({ type: 'Client' })).toBeUndefined()
+    expect(await band.find({ type: 'Code' })).toBeUndefined()
     expect(await band.find({ type: 'Text', text: 'engine band' })).toBeDefined()
     await band.unmount()
     const spin = await mountSpinner($)
@@ -26,29 +26,12 @@ describe('band, spinner and /kiko', () => {
     await spin.unmount()
   })
 
-  test('fighting: Client band on terminal and desktop, one line on vscode and mobile', async ($, on) => {
-    fakeHost(on)
-    await startSession($)
-    await $.turn.start({ text: 'fix flaky test', turnId: 't1' })
-    for (const surface of ['terminal', 'desktop'] as const) {
-      const band = await mountBand($, surface)
-      const client = await band.find({ type: 'Client' })
-      expect(client?.props).toMatchObject({ module: 'hooks/kiko.tsx', props: { phase: 'fight', columns: 80 } })
-      await band.unmount()
-    }
-    for (const surface of ['vscode', 'mobile'] as const) {
-      const band = await mountBand($, surface)
-      expect((await band.find({ type: 'Text' }))?.text).toBe('ROUND 1 · KIKO vs. THE FLAKY TEST · KI 0 · KO 0')
-      await band.unmount()
-    }
-  })
-
   test('a survey in the band is left alone', async ($, on) => {
     fakeHost(on)
     await startSession($)
     await $.turn.start({ text: 'x', turnId: 't1' })
     const band = await $.ui.mount({ plugin: 'kiko', surface: 'desktop', component: 'AbovePrompt', props: { ...BAND, hasSurvey: true } })
-    expect(await band.find({ type: 'Client' })).toBeUndefined()
+    expect(await band.find({ type: 'Code' })).toBeUndefined()
     await band.unmount()
   })
 
@@ -71,7 +54,7 @@ describe('band, spinner and /kiko', () => {
     expect(fake.store.get('kiko:enabled')).toBe(false)
     await $.turn.start({ text: 'x', turnId: 't1' })
     const band = await mountBand($)
-    expect(await band.find({ type: 'Client' })).toBeUndefined()
+    expect(await band.find({ type: 'Code' })).toBeUndefined()
     await band.unmount()
     await run($, 'on')
     expect(fake.store.get('kiko:enabled')).toBe(true)

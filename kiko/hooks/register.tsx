@@ -3,9 +3,10 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { KikoRecord, Round } from '../types'
 import {
-  EMPTY_RECORD, IDLE, applyUsage, beatFor, classifyTool, isKikoRecord, koLine, oneLine, opponentName, recordLine,
-  spinnerKind, spinnerWord, statsText, updateRecord,
+  EMPTY_RECORD, IDLE, TICK_MS, applyUsage, beatFor, beatStepOf, classifyTool, isKikoRecord, koLine, opponentName,
+  recordLine, spinnerKind, spinnerWord, statsText, tick, updateRecord,
 } from './round'
+import { koCard, layout } from './sprites'
 import type { Usage } from './round'
 
 const round = atom({ plugin: 'kiko', key: 'round' } as const, IDLE)
@@ -13,7 +14,6 @@ const enabled = atom({ plugin: 'kiko', key: 'enabled' } as const, true)
 
 const RECORD_KEY = 'kiko:record'
 const ENABLED_KEY = 'kiko:enabled'
-const KO_CARD_MS = 5_000
 
 const isSub = (e: unknown) => Boolean((e as { agentId?: string }).agentId)
 
@@ -61,13 +61,14 @@ async function finishRound($: EngineInterface, e: { turnId: string; reason: stri
   }
 }
 
-// Timers only outlive the dispatch that starts them from session.start, so the K.O. card
-// is cleared by a sweep started there rather than a timer set at the K.O.
-async function sweepKo($: EngineInterface): Promise<void> {
+// The band's clock. Timers only outlive the dispatch that starts them from session.start,
+// and the desktop can't run a Client surface module, so the band animates from here: each
+// tick advances a fight's frame or ends a stale K.O. card, and writes nothing while idle.
+async function tickRound($: EngineInterface): Promise<void> {
   const r = await read($, round)
-  if (!r || r.phase !== 'ko' || r.endedAt === null) return
-  if ((await $.clock.now()) - r.endedAt < KO_CARD_MS) return
-  await update($, round, x => (x && x.phase === 'ko' && x.endedAt === r.endedAt ? { ...x, phase: 'idle' } : x ?? IDLE))
+  if (!r || r.phase === 'idle') return
+  const now = await $.clock.now()
+  if (tick(r, now)) await update($, round, x => (x ? tick(x, now) ?? x : IDLE))
 }
 
 async function setEnabled($: EngineInterface, value: boolean): Promise<void> {
@@ -99,7 +100,7 @@ export const register: Register = on => {
       await update($, enabled, () => saved !== false)
       const rec = await loadRecord($)
       await update($, round, r => ({ ...IDLE, n: r?.n ?? 0, seq: r?.seq ?? 0, record: recordLine(rec) }))
-      $.clock.every(500, () => void sweepKo($).catch(() => undefined))
+      $.clock.every(TICK_MS, () => void tickRound($).catch(() => undefined))
     } catch {
       // Kiko never stops a session from starting.
     }
@@ -184,15 +185,23 @@ export const register: Register = on => {
     const isOn = (await read($, enabled)) ?? true
     const r = (await read($, round)) ?? IDLE
     if (!isOn || r.phase === 'idle' || e.props.hasSurvey) return next(e)
-    const els = $.ui.resolve(e)
     const columns = Math.max(20, e.props.bodyColumns)
-    // The terminal and desktop draw a Client; other tables list one that draws nothing.
-    if ((e.surface === 'terminal' || e.surface === 'desktop') && 'Client' in els) {
-      const { Client } = els
-      return <Client key="kiko" module="./kiko.tsx" props={{ ...r, columns, maxRows: e.props.maxRows }} />
+    const rows = r.phase === 'ko'
+      ? koCard(r, columns)
+      : layout(r, { frame: r.frame, beatStep: beatStepOf(r), now: await $.clock.now() }, columns, e.props.maxRows)
+    const els = $.ui.resolve(e)
+    // The terminal draws Text in its own fixed-width cells; elsewhere one Code block keeps
+    // the columns straight.
+    if (e.surface === 'terminal') {
+      const { Box, Text } = els
+      return (
+        <Box flexDirection="column">
+          {rows.map(row => <Text>{row}</Text>)}
+        </Box>
+      )
     }
-    const { Text } = els
-    return <Text>{oneLine(r)}</Text>
+    const { Code } = els
+    return <Code source={rows.join('\n')} />
   })
 
   on('ui.render', { component: 'Spinner' }, async ($, e, next) => {

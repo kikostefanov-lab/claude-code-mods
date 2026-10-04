@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'claude-code/testing'
 
 import {
-  EMPTY_RECORD, IDLE, applyUsage, beatFor, classifyTool, fmtTokens, isKikoRecord, koLine, mmss, oneLine,
-  opponentName, recordLine, spinnerKind, spinnerWord, statsText, updateRecord,
+  EMPTY_RECORD, IDLE, applyUsage, beatFor, beatStepOf, classifyTool, fmtTokens, isKikoRecord, koLine, mmss, oneLine,
+  opponentName, recordLine, spinnerKind, spinnerWord, statsText, tick, updateRecord,
 } from './round'
 
 const fight = { ...IDLE, phase: 'fight' as const, n: 3, opponent: 'THE FLAKY TEST', startedAt: 0, tokensIn: 12_400, tokensOut: 2_100, reads: 3, writes: 2 }
@@ -36,6 +36,23 @@ describe('round', () => {
     const b = beatFor(a, 'out', 'fix.ts', 'Edit')
     expect(b).toMatchObject({ writes: 3, seq: 2, beat: { id: 2, kind: 'punch' }, status: 'editing fix.ts' })
     expect(beatFor(b, 'dodge', 'Bash', 'Bash')).toMatchObject({ seq: 3, beat: { kind: 'dodge' }, status: 'running Bash' })
+  })
+
+  test('beats start at the current frame and play for 6 frames', () => {
+    const a = beatFor({ ...fight, frame: 10 }, 'in', 'app.ts', 'Read')
+    expect(a.beatAt).toBe(10)
+    expect(beatStepOf(a)).toBe(0)
+    expect(beatStepOf({ ...a, frame: 15 })).toBe(5)
+    expect(beatStepOf({ ...a, frame: 16 })).toBeNull()
+    expect(beatStepOf({ ...fight, beat: null })).toBeNull()
+  })
+
+  test('tick advances a fight, ends a stale K.O. card, leaves idle alone', () => {
+    expect(tick({ ...fight, frame: 4 }, 0)).toMatchObject({ frame: 5 })
+    const ko = { ...fight, phase: 'ko' as const, endedAt: 1_000 }
+    expect(tick(ko, 5_999)).toBeNull()
+    expect(tick(ko, 6_000)).toMatchObject({ phase: 'idle' })
+    expect(tick(IDLE, 0)).toBeNull()
   })
 
   test('applyUsage adds a step', () => {

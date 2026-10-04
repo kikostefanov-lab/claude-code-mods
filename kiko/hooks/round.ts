@@ -1,11 +1,8 @@
 import type { BeatKind, KikoRecord, Mode, Round } from '../types'
-import { fmtTokens, mmss } from './kiko'
-
-export { fmtTokens, mmss }
 
 export const IDLE: Round = {
   phase: 'idle', n: 0, turnId: null, opponent: '', startedAt: 0, endedAt: null, mode: 'requesting', status: '',
-  tokensIn: 0, tokensOut: 0, reads: 0, writes: 0, seq: 0, beat: null, record: '0-0 | streak 0',
+  tokensIn: 0, tokensOut: 0, reads: 0, writes: 0, seq: 0, beat: null, record: '0-0 | streak 0', frame: 0, beatAt: 0,
 }
 
 export const EMPTY_RECORD: KikoRecord = { wins: 0, streak: 0, bestStreak: 0, fastestMs: null, biggestTokens: 0, recent: [] }
@@ -67,7 +64,27 @@ export function beatFor(round: Round, kind: 'in' | 'out' | 'dodge', label: strin
     reads: round.reads + (kind === 'in' ? 1 : 0),
     writes: round.writes + (kind === 'out' ? 1 : 0),
     beat: { id: seq, kind: BEAT[kind], label },
+    beatAt: round.frame,
   }
+}
+
+export const TICK_MS = 200
+export const BEAT_FRAMES = 6
+export const KO_CARD_MS = 5_000
+
+// Which frame of its move the current beat is on, or null once it has played out.
+export function beatStepOf(round: Round): number | null {
+  if (!round.beat) return null
+  const step = round.frame - round.beatAt
+  return step >= 0 && step < BEAT_FRAMES ? step : null
+}
+
+// One tick of the band's clock: the next frame of a fight, the end of a stale K.O. card,
+// or null when nothing changes (idle, or a card still showing).
+export function tick(round: Round, now: number): Round | null {
+  if (round.phase === 'fight') return { ...round, frame: round.frame + 1 }
+  if (round.phase === 'ko' && round.endedAt !== null && now - round.endedAt >= KO_CARD_MS) return { ...round, phase: 'idle' }
+  return null
 }
 
 export type Usage = { input_tokens: number; output_tokens: number; cache_read_input_tokens: number; cache_creation_input_tokens: number }
@@ -100,6 +117,17 @@ export function isKikoRecord(v: unknown): v is KikoRecord {
 }
 
 
+
+export function mmss(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000))
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+}
+
+export function fmtTokens(n: number): string {
+  if (n < 1000) return String(n)
+  if (n < 1_000_000) return `${(n / 1000).toFixed(1)}k`
+  return `${(n / 1_000_000).toFixed(1)}M`
+}
 
 export function recordLine(rec: KikoRecord): string {
   return `${rec.wins}-0 | streak ${rec.streak}`

@@ -19,6 +19,10 @@ export type Round = {
   seq: number
   beat: Beat | null
   record: string
+  /** The band's animation frame, advanced every tick while fighting. */
+  frame: number
+  /** The frame the current beat started on. */
+  beatAt: number
 }
 
 export type KikoRecord = {

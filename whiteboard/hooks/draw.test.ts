@@ -27,7 +27,7 @@ describe('draw', () => {
     expect(argv[0]).toBe(MMDC)
     expect(argv[1]).toBe('-i')
     expect(argv[2]).toMatch(/^\/tmp\/claude-whiteboard\/sess-1\/[a-z0-9]+-[0-9a-f]{6}\.mmd$/)
-    expect(argv.slice(3)).toEqual(['-o', argv[2]!.replace(/\.mmd$/, '.svg'), '-b', 'white', '-q'])
+    expect(argv.slice(3)).toEqual(['-o', argv[2]!.replace(/\.mmd$/, '.svg'), '-b', 'white', '-q', '--no-font-embed'])
     expect(fake.files.get(argv[2]!)).toBe('graph TD; A-->B')
     expect(fake.files.get(argv[4]!)).toBe(SVG_OK)
   })

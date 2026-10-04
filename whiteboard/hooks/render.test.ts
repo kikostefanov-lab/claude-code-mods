@@ -23,7 +23,7 @@ describe('render', () => {
   })
 
   test('mmdcArgv and mmdcEnv', () => {
-    expect(mmdcArgv('/n/bin/mmdc', '/d/x.mmd', '/d/x.svg')).toEqual(['/n/bin/mmdc', '-i', '/d/x.mmd', '-o', '/d/x.svg', '-b', 'white', '-q'])
+    expect(mmdcArgv('/n/bin/mmdc', '/d/x.mmd', '/d/x.svg')).toEqual(['/n/bin/mmdc', '-i', '/d/x.mmd', '-o', '/d/x.svg', '-b', 'white', '-q', '--no-font-embed'])
     expect(mmdcEnv('/n/bin/mmdc', '/usr/bin', '/Users/u')).toEqual({ PATH: '/n/bin:/usr/bin', HOME: '/Users/u' })
     expect(mmdcEnv('/n/bin/mmdc', undefined, undefined)).toEqual({ PATH: '/n/bin:/usr/bin:/bin' })
   })

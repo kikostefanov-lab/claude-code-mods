@@ -26,8 +26,10 @@ export function boardDirFrom(tmpdir: string | undefined, sessionId: string): str
   return `${(tmpdir ?? '/tmp').replace(/\/+$/, '')}/claude-whiteboard/${sessionId}`
 }
 
+// --no-font-embed: mmdc 12 inlines ~160 KB of web fonts, which would push every
+// diagram past MAX_INLINE_SVG; text falls back to arial/sans-serif instead.
 export function mmdcArgv(mmdcPath: string, mmd: string, svg: string): string[] {
-  return [mmdcPath, '-i', mmd, '-o', svg, '-b', 'white', '-q']
+  return [mmdcPath, '-i', mmd, '-o', svg, '-b', 'white', '-q', '--no-font-embed']
 }
 
 export function mmdcEnv(mmdcPath: string, path: string | undefined, home: string | undefined): Record<string, string> {

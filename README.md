@@ -182,10 +182,11 @@ Kiko only watches: every hook passes the turn, its stream and each tool call thr
 
 **Install:** add `:/path/to/claude-code-mods/kiko` to `CLAUDE_CODE_PLUGIN_DIRS` (see the whiteboard's install above), or `claude --plugin-dir /path/to/claude-code-mods/kiko`.
 
-| Surface | Band |
+| Surface | What Kiko shows |
 |---|---|
-| Terminal | Text rows |
-| Desktop Code tab, VS Code, mobile | One fixed-width code block |
+| Terminal | The band as text rows, spinner words, the K.O. line in the transcript |
+| Desktop Code tab | The band as one fixed-width code block, spinner words while Claude thinks or replies |
+| VS Code, mobile | Nothing yet: the engine only raises the band and spinner on the terminal and desktop |
 
 ---
 

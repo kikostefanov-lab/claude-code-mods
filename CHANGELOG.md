@@ -7,7 +7,7 @@ All notable changes to the mods in this repo. Versions follow the plugin manifes
 - First release: Kiko boxes every turn in a band above the prompt. Knowledge In (reads, searches, fetches) are chomps, Knowledge Out (edits, writes) are punches, and the turn ends in a K.O. card and a transcript line.
 - Opponents named from your prompt; a career record across sessions (`/kiko stats`); `/kiko on|off`.
 - Fight-themed spinner words while Claude thinks or replies.
-- The band animates from the hooks module on a 200 ms tick: text rows on the terminal, one fixed-width code block on desktop, VS Code and mobile.
+- The band animates from the hooks module on a 200 ms tick: text rows on the terminal, one fixed-width code block on the desktop (the engine raises the band on those two surfaces only).
 
 ## whiteboard 0.2.0 — 2026-10-04
 

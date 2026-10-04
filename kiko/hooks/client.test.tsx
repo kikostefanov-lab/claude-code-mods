@@ -31,6 +31,7 @@ describe('band animation', () => {
     let ui = await mountBand($, 'terminal')
     expect(await ui.find({ type: 'Code' })).toBeUndefined()
     expect((await ui.findAll({ type: 'Text' })).length).toBe(6)
+    for (const t of await ui.findAll({ type: 'Text' })) expect(t.props.wrap).toBe('truncate')
     await ui.unmount()
     for (const surface of ['desktop', 'vscode', 'mobile'] as const) {
       ui = await mountBand($, surface)

@@ -17,15 +17,25 @@ const ENABLED_KEY = 'kiko:enabled'
 
 const isSub = (e: unknown) => Boolean((e as { agentId?: string }).agentId)
 
-async function loadRecord($: EngineInterface): Promise<KikoRecord> {
-  const saved = await $.store.get(RECORD_KEY).catch(() => undefined)
-  return isKikoRecord(saved) ? saved : EMPTY_RECORD
+// The saved record, and whether it may be written back: a failed read or a value that isn't
+// a record is shown as a fresh one but never overwritten.
+async function loadRecord($: EngineInterface): Promise<{ rec: KikoRecord; isWritable: boolean }> {
+  let saved: unknown
+  try {
+    saved = await $.store.get(RECORD_KEY)
+  } catch {
+    return { rec: EMPTY_RECORD, isWritable: false }
+  }
+  if (saved === undefined) return { rec: EMPTY_RECORD, isWritable: true }
+  return isKikoRecord(saved) ? { rec: saved, isWritable: true } : { rec: EMPTY_RECORD, isWritable: false }
 }
 
 async function startRound($: EngineInterface, text: string, turnId: string): Promise<void> {
   const current = (await read($, round)) ?? IDLE
-  if (current.phase === 'fight') return
-  const rec = await loadRecord($)
+  // The same turn again is a no-op; a different one starts a new round even if the last
+  // turn's turn.complete never came.
+  if (current.phase === 'fight' && current.turnId === turnId) return
+  const { rec } = await loadRecord($)
   const now = await $.clock.now()
   await update($, round, r => {
     const prev = r ?? IDLE
@@ -52,8 +62,9 @@ async function finishRound($: EngineInterface, e: { turnId: string; reason: stri
     await update($, round, x => ({ ...(x ?? IDLE), phase: 'idle' }))
     return
   }
-  const rec = updateRecord(await loadRecord($), { ms: e.durationMs, tokens: r.tokensIn + r.tokensOut, opponent: r.opponent })
-  await $.store.set(RECORD_KEY, rec)
+  const saved = await loadRecord($)
+  const rec = updateRecord(saved.rec, { ms: e.durationMs, tokens: r.tokensIn + r.tokensOut, opponent: r.opponent })
+  if (saved.isWritable) await $.store.set(RECORD_KEY, rec)
   const done: Round = { ...r, phase: 'ko', endedAt: await $.clock.now(), record: recordLine(rec), status: 'K.O.!' }
   await update($, round, () => done)
   if ((await read($, enabled)) ?? true) {
@@ -86,7 +97,7 @@ async function kikoCommand($: EngineInterface, args: string): Promise<string> {
     await setEnabled($, false)
     return 'Kiko is off. The record still counts; /kiko on to bring Kiko back.'
   }
-  const rec = await loadRecord($)
+  const { rec } = await loadRecord($)
   if (word === 'stats') return statsText(rec)
   if (word === '') return `Kiko is ${((await read($, enabled)) ?? true) ? 'on' : 'off'} · ${recordLine(rec)}. Try /kiko stats, /kiko off.`
   return 'Usage: /kiko on, /kiko off, /kiko stats'
@@ -95,10 +106,10 @@ async function kikoCommand($: EngineInterface, args: string): Promise<string> {
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     try {
-      await $.command.register({ name: 'kiko', description: 'Kiko, your KIKO fighter: Knowledge In, Knowledge Out', argumentHint: '[on | off | stats]' })
+      await $.command.register({ name: 'kiko', description: 'Kiko, your KIKO fighter: Knowledge In, Knowledge Out', argumentHint: '[on | off | stats]', immediate: true })
       const saved = await $.store.get(ENABLED_KEY).catch(() => undefined)
       await update($, enabled, () => saved !== false)
-      const rec = await loadRecord($)
+      const { rec } = await loadRecord($)
       await update($, round, r => ({ ...IDLE, n: r?.n ?? 0, seq: r?.seq ?? 0, record: recordLine(rec) }))
       $.clock.every(TICK_MS, () => void tickRound($).catch(() => undefined))
     } catch {
@@ -168,15 +179,19 @@ export const register: Register = on => {
   })
 
   on('turn.complete', async ($, e, next) => {
-    const result = await next(e)
-    if (!isSub(e)) {
-      try {
-        await finishRound($, e as never)
-      } catch {
-        // A failed K.O. leaves the turn's result alone.
+    try {
+      return await next(e)
+    } finally {
+      // The K.O. lands whether or not the chain beneath finished cleanly; its error, if any,
+      // still reaches the engine.
+      if (!isSub(e)) {
+        try {
+          await finishRound($, e as never)
+        } catch {
+          // A failed K.O. leaves the turn's result alone.
+        }
       }
     }
-    return result
   })
 
   on('command.run', { command: 'kiko' }, async ($, e) => ({ text: await kikoCommand($, e.args ?? '') }))
@@ -196,7 +211,7 @@ export const register: Register = on => {
       const { Box, Text } = els
       return (
         <Box flexDirection="column">
-          {rows.map(row => <Text>{row}</Text>)}
+          {rows.map(row => <Text wrap="truncate">{row}</Text>)}
         </Box>
       )
     }

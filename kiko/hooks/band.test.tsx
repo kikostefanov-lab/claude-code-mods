@@ -47,6 +47,12 @@ describe('band, spinner and /kiko', () => {
     await spin.unmount()
   })
 
+  test('/kiko runs at once, even mid-turn', async ($, on) => {
+    const fake = fakeHost(on)
+    await startSession($)
+    expect(fake.commandSpecs.find(c => c.name === 'kiko')).toMatchObject({ immediate: true })
+  })
+
   test('/kiko off and on, saved', async ($, on) => {
     const fake = fakeHost(on)
     await startSession($)

@@ -34,6 +34,8 @@ const IN_TOOLS = new Set(['Read', 'Grep', 'Glob', 'WebFetch', 'WebSearch', 'LS',
 const OUT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
 
 const clip = (s: string, n = 20) => (s.length > n ? s.slice(0, n) : s)
+// Labels land in fixed-width art: anything but printable ASCII becomes '?'.
+const ascii = (s: string) => s.replace(/[^\x20-\x7e]/gu, '?')
 const lastSegment = (p: string) => p.split(/[/\\]/).filter(Boolean).pop() ?? p
 
 export function classifyTool(tool: string, input: unknown): { kind: 'in' | 'out' | 'dodge'; label: string } {
@@ -42,16 +44,16 @@ export function classifyTool(tool: string, input: unknown): { kind: 'in' | 'out'
   const path = str('file_path') || str('notebook_path') || str('path')
   let host = ''
   try { host = str('url') ? new URL(str('url')).host : '' } catch { host = '' }
-  const label = clip(path ? lastSegment(path) : str('pattern') || str('query') || host || tool)
+  const label = clip(ascii(path ? lastSegment(path) : str('pattern') || str('query') || host || tool))
   if (IN_TOOLS.has(tool)) return { kind: 'in', label }
   if (OUT_TOOLS.has(tool)) return { kind: 'out', label }
   if (tool.startsWith('mcp__')) {
-    const short = clip(tool.slice(tool.lastIndexOf('__') + 2))
+    const short = clip(ascii(tool.slice(tool.lastIndexOf('__') + 2)))
     if (/(read|search|get|list|fetch|query|find)/i.test(short)) return { kind: 'in', label: short }
     if (/(write|create|update|edit|delete|send|post|set|add)/i.test(short)) return { kind: 'out', label: short }
     return { kind: 'dodge', label: short }
   }
-  return { kind: 'dodge', label: clip(tool) }
+  return { kind: 'dodge', label: clip(ascii(tool)) }
 }
 
 const BEAT: Record<'in' | 'out' | 'dodge', BeatKind> = { in: 'chomp', out: 'punch', dodge: 'dodge' }
@@ -92,12 +94,14 @@ export function tick(round: Round, now: number): Round | null {
 
 export type Usage = { input_tokens: number; output_tokens: number; cache_read_input_tokens: number; cache_creation_input_tokens: number }
 
+const count = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) ? x : 0)
+
 export function applyUsage(round: Round, usage: Usage): Round {
   return {
     ...round,
     // Cache reads are the conversation re-read, not new knowledge.
-    tokensIn: round.tokensIn + usage.input_tokens + usage.cache_creation_input_tokens,
-    tokensOut: round.tokensOut + usage.output_tokens,
+    tokensIn: round.tokensIn + count(usage.input_tokens) + count(usage.cache_creation_input_tokens),
+    tokensOut: round.tokensOut + count(usage.output_tokens),
   }
 }
 

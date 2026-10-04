@@ -11,17 +11,23 @@ export type Fake = {
   store: Map<string, unknown>
   registered: string[]
   tools: string[]
+  commandSpecs: Array<{ name: string; immediate?: true }>
+  completeFails: boolean
 }
 
 export function fakeHost(on: On, store: Record<string, unknown> = {}): Fake {
-  const fake = { store: new Map(Object.entries(store)), registered: [], tools: [] } as unknown as Fake
+  const fake = { store: new Map(Object.entries(store)), registered: [], tools: [], commandSpecs: [], completeFails: false } as unknown as Fake
   fake.clock = mock.clock(on, { now: 1_760_000_000_000 })
   on('session.start', ($, e) => ({ cwd: e.cwd }))
-  on('command.register', ($, e) => { fake.registered.push(`command:${e.name}`); return v(undefined) })
+  on('command.register', ($, e) => { fake.registered.push(`command:${e.name}`); fake.commandSpecs.push(e as never); return v(undefined) })
   on('store.get', ($, e) => v(fake.store.get(e.key)))
   on('store.set', ($, e) => { fake.store.set(e.key, e.value); return v(undefined) })
   on('turn.start', ($, e) => ({ turnId: e.turnId }))
-  on('turn.complete', ($, e) => ({ text: e.answer }))
+  on('turn.complete', ($, e) => {
+    // A stub that throws is skipped, so the chain beneath rejects: what an engine failure looks like.
+    if (fake.completeFails) throw new Error('engine failed to finish the turn')
+    return { text: e.answer }
+  })
   on('tool.call', ($, e) => { fake.tools.push(e.tool); return { result: 'ok' } })
   // What the engine would draw when Kiko falls through: marker trees the tests can find.
   on('ui.render', { component: 'AbovePrompt' }, () => ({ type: 'Text', props: {}, children: ['engine band'] }) as never)

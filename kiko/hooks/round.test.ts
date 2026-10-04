@@ -29,6 +29,10 @@ describe('round', () => {
     expect(classifyTool('mcp__gh__search_issues', {})).toEqual({ kind: 'in', label: 'search_issues' })
     expect(classifyTool('mcp__gh__create_issue', {})).toEqual({ kind: 'out', label: 'create_issue' })
     expect(classifyTool('Read', { file_path: '/x/a-really-long-file-name-here.tsx' }).label).toHaveLength(20)
+    // Labels land in fixed-width art: anything but printable ASCII becomes '?', so a
+    // wide or split character can't push a row past the band.
+    expect(classifyTool('Read', { file_path: '/x/日本語.md' }).label).toBe('???.md')
+    expect(classifyTool('Grep', { pattern: 'x🚀y' }).label).toBe('x?y')
   })
 
   test('beatFor counts and numbers beats', () => {
@@ -54,6 +58,10 @@ describe('round', () => {
     expect(tick(ko, 5_999)).toBeNull()
     expect(tick(ko, 6_000)).toMatchObject({ phase: 'idle' })
     expect(tick(IDLE, 0)).toBeNull()
+  })
+
+  test('applyUsage tolerates a partial usage', () => {
+    expect(applyUsage(IDLE, { input_tokens: 5 } as never)).toMatchObject({ tokensIn: 5, tokensOut: 0 })
   })
 
   test('applyUsage adds a step', () => {

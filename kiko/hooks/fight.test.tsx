@@ -74,7 +74,6 @@ describe('fight', () => {
     stepSource(on)
     await startSession($)
     await $.turn.start({ text: 'main task', turnId: 'main' })
-    await $.turn.start({ text: 'sub task', turnId: 'sub' })
     await step($, on, 'sub', 'agent-1')
     // $.tool.call drops an agentId it is given, so a subagent's tool call can't be raised
     // from a test; the tool.call hook's isSub check is the same one these events take.
@@ -84,6 +83,36 @@ describe('fight', () => {
     expect(band).toContain('ROUND 1 ── KIKO vs. THE MAIN TASK')
     expect(band).toMatch(/KI [█░]+ 0 /)
     expect(fake.store.get('kiko:record')).toBeUndefined()
+  })
+
+  test('a missed turn.complete does not wedge Kiko', async ($, on) => {
+    const fake = fakeHost(on)
+    await startSession($)
+    await $.turn.start({ text: 'first problem', turnId: 'a' })
+    await $.turn.start({ text: 'second problem', turnId: 'b' })
+    await fake.clock.advance(200 * 8)
+    expect(await bandText($)).toContain('ROUND 2 ── KIKO vs. THE SECOND PROBLEM')
+    await $.turn.start({ text: 'second problem', turnId: 'b' })
+    expect(await bandText($)).toContain('ROUND 2 ──')
+  })
+
+  test('the K.O. lands even when the engine fails to finish the turn', async ($, on) => {
+    const fake = fakeHost(on)
+    await startSession($)
+    await $.turn.start({ text: 'flaky deploy', turnId: 't5' })
+    fake.completeFails = true
+    await expect(complete($, 't5')).rejects.toBeDefined()
+    expect(await bandText($)).toContain('K.O.!')
+    expect(fake.store.get('kiko:record')).toMatchObject({ wins: 1 })
+  })
+
+  test('a corrupt saved record is left alone, not overwritten', async ($, on) => {
+    const fake = fakeHost(on, { 'kiko:record': { wins: 'lots' } })
+    await startSession($)
+    await $.turn.start({ text: 'x y', turnId: 't6' })
+    await complete($, 't6')
+    expect(fake.store.get('kiko:record')).toEqual({ wins: 'lots' })
+    expect(await bandText($)).toContain('K.O.!')
   })
 
   test('the stream passes through unchanged', async ($, on) => {

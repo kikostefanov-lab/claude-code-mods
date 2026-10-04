@@ -2,7 +2,8 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Entry } from '../types'
-import { EMPTY, add } from './history'
+import { mermaidBlock } from './actions'
+import { EMPTY, add, current, step } from './history'
 import {
   MAX_INLINE_SVG, MISSING_HINT, RENDER_TIMEOUT_MS, boardDirFrom, failureOf, locatedPath, mmdcArgv, mmdcEnv,
   rejectionOf, stripFences,
@@ -36,6 +37,9 @@ const INPUT_SCHEMA = {
   required: ['title', 'mermaid'],
   additionalProperties: false,
 }
+
+const EMPTY_HINT =
+  'Claude draws here when a diagram would help: ask for a sequence, class, state or ER diagram, a flowchart or an architecture sketch.'
 
 async function newId($: EngineInterface): Promise<string> {
   const now = await $.clock.now()
@@ -89,6 +93,7 @@ export const register: Register = (on, options) => {
 
   on('session.start', async ($, e, next) => {
     await $.tool.register({ name: 'draw', description: DESCRIPTION, inputSchema: INPUT_SCHEMA })
+    await $.command.register({ name: 'whiteboard', description: "Open the whiteboard pane with Claude's diagrams" })
     return next(e)
   })
 
@@ -104,9 +109,9 @@ export const register: Register = (on, options) => {
     if (!out.ok) return { deny: out.message }
 
     const entry: Entry = { id, title, source, svgPath: out.svgPath, svgBytes: out.svgBytes, createdAt: await $.clock.now() }
-    await update($, history, h => add(h ?? EMPTY, entry))
-    const h = (await read($, history)) ?? EMPTY
-    const at = h.entries.findIndex(x => x.id === id) + 1
+    await update($, history, list => add(list ?? EMPTY, entry))
+    const board = (await read($, history)) ?? EMPTY
+    const at = board.entries.findIndex(x => x.id === id) + 1
 
     const opened = await $.ui.open({ id: PANE, title: 'Whiteboard' })
     const notes = [
@@ -116,6 +121,61 @@ export const register: Register = (on, options) => {
       opened.isPlaced ? '' : `The pane did not open (${opened.reason}); tell the user to run /whiteboard to see it.`,
     ].filter(Boolean)
 
-    return { result: [`Drawn '${title}' (${at}/${h.entries.length}).`, ...notes].join(' ') }
+    return { result: [`Drawn '${title}' (${at}/${board.entries.length}).`, ...notes].join(' ') }
   }).catch(() => ({ deny: 'The whiteboard hit an unexpected error while drawing. Try again; if it repeats, tell the user.' }))
+
+  on('command.run', { command: 'whiteboard' }, async $ => {
+    const opened = await $.ui.open({ id: PANE, title: 'Whiteboard', focus: true })
+    return { text: opened.isPlaced ? 'Whiteboard opened.' : `Whiteboard could not open: ${opened.reason}` }
+  })
+
+  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
+    const els = $.ui.resolve(e)
+    const { Box, Text, Button, Markdown } = els
+    const board = (await read($, history)) ?? EMPTY
+    const entry = current(board)
+    if (!entry) {
+      return (
+        <Box flexDirection="column">
+          <Text dimColor>{EMPTY_HINT}</Text>
+        </Box>
+      )
+    }
+
+    // The terminal's table carries an Svg that draws nothing there: show the source instead.
+    const Svg = e.surface !== 'terminal' && 'Svg' in els ? els.Svg : undefined
+    const isMissing = !(await $.fs.exists(entry.svgPath))
+    const isTooLarge = entry.svgBytes > MAX_INLINE_SVG
+    const svg = Svg && !isMissing && !isTooLarge ? await $.fs.read(entry.svgPath).catch(() => undefined) : undefined
+    const note = isMissing
+      ? 'Render missing (temp files were cleaned up).'
+      : Svg && isTooLarge
+        ? 'Too large to show inline: press Open to view it.'
+        : ''
+
+    return (
+      <Box flexDirection="column" gap={1}>
+        <Box flexDirection="row" gap={1} flexWrap="wrap">
+          <Button key="prev" hotkey="h" plain label="◀" dimColor={board.index <= 0}
+            onPress={() => update($, history, x => step(x ?? EMPTY, -1))} />
+          <Text>{`${board.index + 1}/${board.entries.length}`}</Text>
+          <Button key="next" hotkey="l" plain label="▶" dimColor={board.index >= board.entries.length - 1}
+            onPress={() => update($, history, x => step(x ?? EMPTY, 1))} />
+          <Text bold>{entry.title}</Text>
+          <Button key="export" label="Export" onPress={() => undefined} />
+          <Button key="copy" label="Copy" onPress={() => undefined} />
+          <Button key="open" hotkey="o" label="Open" onPress={() => undefined} />
+        </Box>
+        {note ? (
+          <Box flexDirection="row" gap={1}>
+            <Text dimColor>{note}</Text>
+            {isMissing ? <Button key="rerender" label="Re-render" onPress={() => undefined} /> : null}
+          </Box>
+        ) : null}
+        {Svg && svg !== undefined
+          ? <Svg source={svg} alt={entry.title} />
+          : <Markdown text={mermaidBlock(entry.source)} />}
+      </Box>
+    )
+  })
 }

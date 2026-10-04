@@ -49,7 +49,7 @@ In the terminal a pane opens by itself only in the fullscreen layout at ≥ 144 
   npm i -g @mermaid-js/mermaid-cli
   ```
 
-  The mod finds `mmdc` through your login shell (`zsh -lc 'command -v mmdc'`), so nvm installs work even when the desktop app's `PATH` doesn't include them. If it can't, set the plugin option **`mmdcPath`** to the absolute path.
+  The mod finds `mmdc` through your login shell (`zsh -lc 'command -v mmdc'`), then falls back to the newest `~/.nvm/versions/node/*/bin/mmdc`, so nvm installs work even when the desktop app's `PATH` doesn't include them. If neither finds it, set the plugin option **`mmdcPath`** to the absolute path.
 
 ### Install
 
@@ -114,7 +114,7 @@ whiteboard/
 
 ```bash
 claude plugin validate whiteboard   # what the engine will load, call and refuse
-claude plugin test whiteboard       # 40 tests, terminal + desktop surfaces
+claude plugin test whiteboard       # 49 tests, terminal + desktop surfaces
 whiteboard/scripts/smoke-mmdc.sh    # real mmdc: renders, size limit, syntax errors
 ```
 
@@ -122,6 +122,8 @@ whiteboard/scripts/smoke-mmdc.sh    # real mmdc: renders, size limit, syntax err
 
 - Mermaid's state-diagram grammar is lenient: some typos render as odd states instead of failing.
 - No inline image in kitty / Ghostty yet (the terminal shows source + Open).
+- Sources longer than ~9,800 characters show truncated in the source view (Copy / Export still give the full text).
+- Interrupting Claude doesn't stop a running render; the 20 s timeout bounds it.
 
 ---
 

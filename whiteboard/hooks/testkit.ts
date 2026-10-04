@@ -21,9 +21,11 @@ export type Fake = {
   mode: MmdcMode
   svg: string
   placePane: boolean
+  denyOpen: boolean
+  denyWorkWrites: boolean
+  shellFindsMmdc: boolean
 }
 
-const parent = (p: string) => (p.lastIndexOf('/') > 0 ? p.slice(0, p.lastIndexOf('/')) : '/')
 const ran = (stdout: string, exitCode = 0, stderr = '') =>
   ({ exitCode, stdout, stderr, isStdoutTruncated: false, isStderrTruncated: false })
 
@@ -31,7 +33,7 @@ export function fakeHost(on: On): Fake {
   const fake: Fake = {
     files: new Map([[MMDC, '#!/usr/bin/env node']]),
     runs: [], toasts: [], copies: [], opens: [], panes: [], registered: [],
-    mode: 'ok', svg: SVG_OK, placePane: true,
+    mode: 'ok', svg: SVG_OK, placePane: true, denyOpen: false, denyWorkWrites: false, shellFindsMmdc: true,
   }
   mock.clock(on, { now: 1_760_000_000_000 })
   mock.env(on, { TMPDIR: '/tmp/', PATH: '/usr/bin:/bin', HOME: '/Users/test' })
@@ -46,7 +48,11 @@ export function fakeHost(on: On): Fake {
     (fake.mode !== 'missing' || e.path !== MMDC) &&
       (fake.files.has(e.path) || [...fake.files.keys()].some(k => k.startsWith(`${e.path}/`))),
   ))
-  on('fs.write', ($, e) => { fake.files.set(e.path, e.text); return v(undefined) })
+  on('fs.write', ($, e) => {
+    if (fake.denyWorkWrites && e.path.startsWith('/work/')) return { deny: `EACCES: ${e.path}` }
+    fake.files.set(e.path, e.text)
+    return v(undefined)
+  })
   on('fs.read', ($, e) => {
     const text = fake.files.get(e.path)
     return text === undefined ? { deny: `ENOENT: ${e.path}` } : v(text)
@@ -56,14 +62,23 @@ export function fakeHost(on: On): Fake {
     if (text === undefined) return { deny: `ENOENT: ${e.path}` }
     return v({ kind: 'file' as const, size: text.length, mtimeMs: 0, isLink: false })
   })
-  on('fs.list', ($, e) => v([...fake.files.keys()]
-    .filter(k => parent(k) === e.path)
-    .map(k => ({ name: k.slice(e.path.length + 1), kind: 'file' as const, size: fake.files.get(k)!.length, mtimeMs: 0, isLink: false }))))
+  on('fs.list', ($, e) => {
+    const names = new Map<string, 'file' | 'dir'>()
+    for (const k of fake.files.keys()) {
+      if (!k.startsWith(`${e.path}/`)) continue
+      const rest = k.slice(e.path.length + 1)
+      const [first] = rest.split('/')
+      names.set(first!, rest.includes('/') ? 'dir' : 'file')
+    }
+    return v([...names].map(([name, kind]) => ({
+      name, kind, size: fake.files.get(`${e.path}/${name}`)?.length ?? 0, mtimeMs: 0, isLink: false,
+    })))
+  })
 
   on('process.run', ($, e) => {
     const argv = [...e.argv]
     fake.runs.push(argv)
-    if (argv[0] === '/bin/zsh') return v(ran(`${MMDC}\n`))
+    if (argv[0] === '/bin/zsh') return v(fake.shellFindsMmdc ? ran(`${MMDC}\n`) : ran('', 1))
     if (argv[0] === 'open') { fake.opens.push(argv[1]!); return v(ran('')) }
     if (fake.mode === 'timeout') return { deny: 'process timed out after 20000 ms' }
     if (fake.mode === 'syntax') {
@@ -74,6 +89,7 @@ export function fakeHost(on: On): Fake {
   })
 
   on('ui.open', ($, e) => {
+    if (fake.denyOpen) return { deny: 'another plugin refused the pane' }
     fake.panes.push(e.id)
     return v(fake.placePane
       ? { isPlaced: true as const }

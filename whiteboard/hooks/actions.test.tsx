@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-import { freeName, mermaidBlock } from './actions'
+import { MARKDOWN_LIMIT, cleanTitle, freeName, mermaidBlock, sourceView } from './actions'
 import { fakeHost, startSession } from './testkit'
 
 const PROPS = {
@@ -27,6 +27,58 @@ describe('actions', () => {
 
   test('mermaidBlock', () => {
     expect(mermaidBlock('graph TD')).toBe('```mermaid\ngraph TD\n```')
+  })
+
+  test('sourceView keeps short sources whole', () => {
+    expect(sourceView('graph TD')).toEqual({ text: '```mermaid\ngraph TD\n```', isTruncated: false })
+  })
+
+  test('sourceView cuts long sources at a line under the Markdown limit', () => {
+    const source = ['flowchart TD', ...Array.from({ length: 900 }, (_, i) => `  n${i} --> n${i + 1}`)].join('\n')
+    const view = sourceView(source)
+    expect(view.isTruncated).toBe(true)
+    expect(view.text.length).toBeLessThanOrEqual(MARKDOWN_LIMIT)
+    expect(view.text.startsWith('```mermaid\nflowchart TD\n')).toBe(true)
+    expect(view.text.endsWith('\n```')).toBe(true)
+    expect(view.text).not.toContain('\n\n```')
+  })
+
+  test('cleanTitle', () => {
+    expect(cleanTitle('Bell\u0007Title\u001b[31m')).toBe('Bell Title [31m')
+    expect(cleanTitle('  two\nlines\r\n ')).toBe('two lines')
+  })
+
+  test('a long source keeps the pane and its toolbar', async ($, on) => {
+    fakeHost(on)
+    await startSession($)
+    const source = ['flowchart TD', ...Array.from({ length: 900 }, (_, i) => `  n${i} --> n${i + 1}`)].join('\n')
+    await draw($, 'Long', source)
+    const ui = await mount($, 'terminal')
+    expect(await ui.find({ type: 'Button', key: 'copy' })).toBeDefined()
+    expect(((await ui.find({ type: 'Markdown' }))?.text ?? '').length).toBeLessThanOrEqual(MARKDOWN_LIMIT)
+    expect(await ui.find({ type: 'Text', text: /Source truncated/ })).toBeDefined()
+    await ui.unmount()
+  })
+
+  test('a title with control characters still draws', async ($, on) => {
+    fakeHost(on)
+    await startSession($)
+    const r = await draw($, 'Bell\u0007Title\nX', 'graph TD; A-->B')
+    expect(r).toMatchObject({ result: "Drawn 'Bell Title X' (1/1)." })
+    const ui = await mount($, 'terminal')
+    expect(await ui.find({ type: 'Button', key: 'copy' })).toBeDefined()
+    await ui.unmount()
+  })
+
+  test('export that cannot write says so', async ($, on) => {
+    const fake = fakeHost(on)
+    await startSession($)
+    await draw($, 'RO', 'graph TD; A-->B')
+    fake.denyWorkWrites = true
+    const ui = await mount($, 'terminal')
+    await ui.press({ key: 'export' })
+    expect(fake.toasts.at(-1)).toMatch(/^Export failed: .*EACCES/)
+    await ui.unmount()
   })
 
   test('export writes .mmd and .svg, suffixing on collision', async ($, on) => {

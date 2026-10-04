@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-import { boardDirFrom, dirname, failureOf, locatedPath, mmdcArgv, mmdcEnv, rejectionOf, stripFences } from './render'
+import { boardDirFrom, byNewestVersion, dirname, failureOf, locatedPath, mmdcArgv, mmdcEnv, rejectionOf, stripFences } from './render'
 
 // The engine follows `$` only into functions of the same file, so the parts of
 // rendering that call `$` live in register.tsx and draw.test.ts covers them;
@@ -60,6 +60,10 @@ describe('render', () => {
   test('rejectionOf tells a timeout from a launch failure', () => {
     expect(rejectionOf(new Error('process timed out after 20000 ms'))).toMatchObject({ kind: 'timeout', message: expect.stringContaining('longer than 20s') })
     expect(rejectionOf(new Error('spawn EACCES'))).toEqual({ ok: false, kind: 'failed', message: 'mmdc could not run: spawn EACCES' })
+  })
+
+  test('byNewestVersion', () => {
+    expect(['v18.20.0', 'v22.10.1', 'v22.9.0', 'system'].sort(byNewestVersion)).toEqual(['v22.10.1', 'v22.9.0', 'v18.20.0', 'system'])
   })
 
   test('locatedPath', () => {

@@ -64,3 +64,13 @@ export function locatedPath(run: { exitCode: number; stdout: string }): string |
   const line = run.stdout.trim().split('\n').pop()?.trim() ?? ''
   return run.exitCode === 0 && line.startsWith('/') ? line : null
 }
+
+// Newest first: nvm folder names (v22.10.1) by numeric parts; anything else last.
+export function byNewestVersion(a: string, b: string): number {
+  const parts = (s: string) => /^v?(\d+)\.(\d+)\.(\d+)/.exec(s)?.slice(1).map(Number)
+  const pa = parts(a)
+  const pb = parts(b)
+  if (!pa || !pb) return pa ? -1 : pb ? 1 : a.localeCompare(b)
+  for (let i = 0; i < 3; i++) if (pa[i] !== pb[i]) return pb[i]! - pa[i]!
+  return 0
+}

@@ -104,6 +104,26 @@ describe('draw', () => {
     expect(resultOf(r)).toMatch(/^Drawn 'Huge' \(1\/1\)\. The SVG is too large/)
   })
 
+  test('a refused pane still reports the diagram as drawn', async ($, on) => {
+    const fake = fakeHost(on)
+    await startSession($)
+    fake.denyOpen = true
+    const r = await draw($, 'Refused', 'graph TD; A-->B')
+    expect(resultOf(r)).toMatch(/^Drawn 'Refused' \(1\/1\)\. The pane did not open/)
+  })
+
+  test('falls back to the newest nvm install when the login shell finds nothing', async ($, on) => {
+    const fake = fakeHost(on)
+    fake.shellFindsMmdc = false
+    for (const v of ['v18.20.0', 'v22.9.0', 'v22.10.1']) fake.files.set(`/Users/test/.nvm/versions/node/${v}/bin/node`, '')
+    fake.files.set('/Users/test/.nvm/versions/node/v22.9.0/bin/mmdc', '#!')
+    fake.files.set('/Users/test/.nvm/versions/node/v18.20.0/bin/mmdc', '#!')
+    await startSession($)
+    const r = await draw($, 'Nvm', 'graph TD; A-->B')
+    expect(r).toMatchObject({ result: "Drawn 'Nvm' (1/1)." })
+    expect(fake.runs.at(-1)![0]).toBe('/Users/test/.nvm/versions/node/v22.9.0/bin/mmdc')
+  })
+
   test('pane not placed', async ($, on) => {
     const fake = fakeHost(on)
     await startSession($)

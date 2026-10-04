@@ -2,10 +2,10 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, RenderSurface } from 'claude-code'
 
 import type { Entry } from '../types'
-import { freeName, mermaidBlock } from './actions'
+import { cleanTitle, freeName, sourceView } from './actions'
 import { EMPTY, add, current, replace, slug, step } from './history'
 import {
-  MAX_INLINE_SVG, MISSING_HINT, RENDER_TIMEOUT_MS, boardDirFrom, failureOf, locatedPath, mmdcArgv, mmdcEnv,
+  MAX_INLINE_SVG, MISSING_HINT, RENDER_TIMEOUT_MS, boardDirFrom, byNewestVersion, failureOf, locatedPath, mmdcArgv, mmdcEnv,
   rejectionOf, stripFences,
 } from './render'
 import type { RenderResult } from './render'
@@ -55,7 +55,22 @@ async function boardDir($: EngineInterface): Promise<string> {
 
 async function locateMmdc($: EngineInterface): Promise<string | null> {
   const run = await $.process.run(['/bin/zsh', '-lc', 'command -v mmdc'], { timeoutMs: 10_000 }).catch(() => undefined)
-  return run ? locatedPath(run) : null
+  const found = run ? locatedPath(run) : null
+  return found ?? (await nvmMmdc($))
+}
+
+// nvm's installer loads it from .zshrc, which a login shell does not read.
+async function nvmMmdc($: EngineInterface): Promise<string | null> {
+  const home = await $.env.get('HOME')
+  if (!home) return null
+  const root = `${home}/.nvm/versions/node`
+  if (!(await $.fs.exists(root))) return null
+  const versions = (await $.fs.list(root).catch(() => [])).map(entry => entry.name).sort(byNewestVersion)
+  for (const version of versions) {
+    const candidate = `${root}/${version}/bin/mmdc`
+    if (await $.fs.exists(candidate)) return candidate
+  }
+  return null
 }
 
 async function renderMermaid(
@@ -133,8 +148,8 @@ export const register: Register = (on, options) => {
 
   on('tool.call', { tool: TOOL }, async ($, e) => {
     const args = e as unknown as { title?: unknown; mermaid?: unknown }
-    const title = typeof args.title === 'string' ? args.title.trim() : ''
-    const source = typeof args.mermaid === 'string' ? stripFences(args.mermaid) : ''
+    const title = typeof args.title === 'string' ? cleanTitle(args.title) : ''
+    const source = typeof args.mermaid === 'string' ? stripFences(args.mermaid.replace(/\r\n?/g, '\n')) : ''
     if (!source) return { deny: 'draw needs `mermaid`: the Mermaid source of the diagram.' }
     if (!title || title.length > 80) return { deny: 'draw needs a `title` of 1 to 80 characters.' }
 
@@ -148,6 +163,7 @@ export const register: Register = (on, options) => {
     const at = board.entries.findIndex(x => x.id === id) + 1
 
     const opened = await $.ui.open({ id: PANE, title: 'Whiteboard' })
+      .catch((err: unknown) => ({ isPlaced: false as const, reason: err instanceof Error ? err.message : String(err) }))
     const notes = [
       out.svgBytes > MAX_INLINE_SVG
         ? 'The SVG is too large to show inline: the pane shows its Mermaid source and an Open button. Consider splitting the diagram.'
@@ -181,6 +197,7 @@ export const register: Register = (on, options) => {
     const isMissing = !(await $.fs.exists(entry.svgPath))
     const isTooLarge = entry.svgBytes > MAX_INLINE_SVG
     const svg = Svg && !isMissing && !isTooLarge ? await $.fs.read(entry.svgPath).catch(() => undefined) : undefined
+    const view = sourceView(entry.source)
     const note = isMissing
       ? 'Render missing (temp files were cleaned up).'
       : Svg && isTooLarge
@@ -196,7 +213,7 @@ export const register: Register = (on, options) => {
           <Button key="next" hotkey="l" plain label="▶" dimColor={board.index >= board.entries.length - 1}
             onPress={() => update($, history, x => step(x ?? EMPTY, 1))} />
           <Text bold>{entry.title}</Text>
-          <Button key="export" label="Export" onPress={async () => $.ui.toast(await exportEntry($, entry))} />
+          <Button key="export" label="Export" onPress={async () => $.ui.toast(await exportEntry($, entry).catch((err: unknown) => `Export failed: ${err instanceof Error ? err.message : String(err)}`))} />
           <Button key="copy" label="Copy" onPress={async p => $.ui.toast(await copyEntry($, entry, p.surface))} />
           <Button key="open" hotkey="o" label="Open" onPress={async () => {
             const problem = await openEntry($, entry)
@@ -211,7 +228,12 @@ export const register: Register = (on, options) => {
         ) : null}
         {Svg && svg !== undefined
           ? <Svg source={svg} alt={entry.title} />
-          : <Markdown text={mermaidBlock(entry.source)} />}
+          : (
+            <Box flexDirection="column">
+              <Markdown text={view.text} />
+              {view.isTruncated ? <Text dimColor>Source truncated: use Copy or Export for the full text.</Text> : null}
+            </Box>
+          )}
       </Box>
     )
   })

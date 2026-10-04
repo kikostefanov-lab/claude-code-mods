@@ -2,6 +2,13 @@
 
 All notable changes to the mods in this repo. Versions follow the plugin manifest.
 
+## kiko 0.1.0 — 2026-10-04
+
+- First release: Kiko boxes every turn in a band above the prompt. Knowledge In (reads, searches, fetches) are chomps, Knowledge Out (edits, writes) are punches, and the turn ends in a K.O. card and a transcript line.
+- Opponents named from your prompt; a career record across sessions (`/kiko stats`); `/kiko on|off`.
+- Fight-themed spinner words while Claude thinks or replies.
+- The band animates from the hooks module on a 200 ms tick: text rows on the terminal, one fixed-width code block on desktop, VS Code and mobile.
+
 ## whiteboard 0.2.0 — 2026-10-04
 
 ### Added

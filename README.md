@@ -9,6 +9,7 @@ Experiments with **Claude Code mods**: plugins of function hooks that add live p
 | Mod | What it does |
 |---|---|
 | [`whiteboard/`](whiteboard) | Gives Claude a `draw` tool: Mermaid, D2 and PlantUML diagrams rendered locally and shown in a side pane, with history, versions, export, copy and share. |
+| [`kiko/`](kiko) | **K**nowledge **I**n, **K**nowledge **O**ut: a TUI critter boxes every turn above your prompt, chomping what Claude reads, punching with what it writes, and finishing with a K.O. |
 
 ---
 
@@ -142,6 +143,7 @@ whiteboard/
 ```bash
 claude plugin validate whiteboard   # what the engine will load, call and refuse
 claude plugin test whiteboard       # 85 tests across terminal, desktop and mobile
+claude plugin test kiko             # 36 tests: round logic, sprites, the band on every surface
 whiteboard/scripts/smoke-mmdc.sh    # real mmdc: SVG size limit, PNG, syntax errors
 ```
 
@@ -152,6 +154,38 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md).
 - Mermaid's state-diagram grammar is lenient: some typos render as odd states instead of failing.
 - Sources longer than about 9,800 characters show truncated in the source view; Copy and Export still give the full text.
 - Windows support is written and unit-tested but has not been run on a Windows machine yet.
+
+---
+
+## Kiko
+
+**K-I-K-O: Knowledge In, Knowledge Out.** While Claude works, Kiko boxes your problem in a band above the prompt. Every turn is a round; what Claude reads is Knowledge In, what it writes is Knowledge Out, and the end of the turn is the K.O.
+
+```
+ ROUND 3 ── KIKO vs. THE FLAKY AUTH TEST ─────────────── 0:42
+ KI █████████░░░ 12.4k                     KO ████████░░░░ 2.1k
+                /\_/\                         ,_,
+   [app.ts]›››( O.O )         {fix.ts}      (x_x)
+                /| |=>              ‹ jab!   \ /
+ > reading app.ts
+```
+
+- **Rounds**: "ROUND n ── FIGHT!" when a turn starts; the opponent is named from your prompt.
+- **Moves**: swirly eyes while Claude thinks, talking while it replies, a **chomp** (`[file]›››`) for every read, search or fetch, a **punch** (`{file}` → `(x_x)`) for every edit or write, a dodge for other tools.
+- **Bars**: KI is new input tokens, KO is output tokens (log scale).
+- **K.O.**: a 3-row card for 5 seconds, plus a `K.O. ▸ …` notice in the transcript (the terminal shows it; the desktop doesn't display notices yet).
+- **Career record** across sessions: `/kiko stats` (wins, streak, fastest and biggest K.O., last opponents).
+- **Spinner words** while Claude thinks or replies: "Kikonsidering", "Winding up the KO", "Trash-talking"…
+- `/kiko off` and `/kiko on` (saved; the record still counts while off). Interrupted or failed turns end quietly.
+
+Kiko only watches: every hook passes the turn, its stream and each tool call through unchanged, and never calls a model.
+
+**Install:** add `:/path/to/claude-code-mods/kiko` to `CLAUDE_CODE_PLUGIN_DIRS` (see the whiteboard's install above), or `claude --plugin-dir /path/to/claude-code-mods/kiko`.
+
+| Surface | Band |
+|---|---|
+| Terminal | Text rows |
+| Desktop Code tab, VS Code, mobile | One fixed-width code block |
 
 ---
 
@@ -166,12 +200,19 @@ Useful if you're writing your own mod. These are things the type declarations do
 - **Relative `$.fs` paths resolve against the engine's cwd**, not necessarily the session's: build paths from `$.session.cwd()`.
 - **A slash command can't call `$.prompt.submit` directly**: the command holds the turn the prompt would wait for. Submit from a timer (`$.clock.after(0, …)`) or a later event.
 - **`$.process.spawn` kills its child when the dispatch is abandoned**, so a render started from a tool call stops when the user interrupts. `$.process.run` has a timeout but no abort.
+- **The desktop app (2.1.286) can't run `Client` surface modules**: any module, even ten lines with no imports, is torn down with "did not load within 10s" (in `~/Library/Logs/Claude/claude.ai-web.log`). Animate from the hooks module instead: a `$.clock.every` started in `session.start` writing a frame counter to `$.state`, with the band drawing rows (Text on the terminal, `Code` elsewhere for fixed-width columns). The test kit runs `Client` modules fine, so it won't catch this.
+- **Desktop panes show one at a time; only the visible pane runs its content.** Keep that in mind when probing with several panes.
+- **Timers only outlive the dispatch that starts them from `session.start`.** A `$.clock.after` set inside `turn.complete` never fires.
+- **VS Code's element table lists a `Client` that draws nothing**, like the terminal's `Svg`.
+- **On the desktop, a running tool sets the spinner's `message`** ("Running tools…"), so a spinner rewrite that respects `message` only shows while Claude thinks or replies.
 - **In `claude plugin test`:**
   - The test's `$` carries only engine events (`tool.call`, `ui.mount`, `session.start`, `command.run`…), not plugin calls (`fs`, `env`, `process`), so test through the plugin's own tools, commands and panes.
   - `tool.register` / `command.register` have no implementation there and must be stubbed.
   - Stubs answer `{ value }` or `{ deny }`; one that throws is skipped, not rejected.
   - A `process.spawn` stub is an async generator that yields chunks and returns `{ value: { code, signal } }`.
   - `mock.clock` holds timers until the test calls `advance`.
+  - Inline test plugins are written to a temp folder, so they can't name a surface module of the plugin under test.
+  - The CLI's runner (2.1.284) can't hook or observe `session.append`; check appended notices live.
 
 ## Design docs
 

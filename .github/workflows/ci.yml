@@ -18,6 +18,10 @@ jobs:
         run: claude plugin validate whiteboard
       - name: Run the plugin tests
         run: claude plugin test whiteboard
+      - name: Validate and test Kiko
+        run: |
+          claude plugin validate kiko
+          claude plugin test kiko
       - name: Smoke test the real mmdc
         run: |
           echo '{ "args": ["--no-sandbox"] }' > "$RUNNER_TEMP/puppeteer.json"

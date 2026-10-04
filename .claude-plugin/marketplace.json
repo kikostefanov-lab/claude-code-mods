@@ -1,13 +1,25 @@
 {
   "name": "claude-code-mods",
-  "owner": { "name": "Kiko Stefanov", "url": "https://github.com/kikostefanov-lab" },
-  "metadata": { "description": "Claude Code mods: function-hook plugins that add panes, tools and commands." },
+  "owner": {
+    "name": "Kiko Stefanov",
+    "url": "https://github.com/kikostefanov-lab"
+  },
+  "metadata": {
+    "description": "Claude Code mods: function-hook plugins that add panes, tools and commands."
+  },
   "plugins": [
     {
       "name": "whiteboard",
       "source": "./whiteboard",
       "description": "Claude draws Mermaid, D2 and PlantUML diagrams into a side pane with history, versions, export, copy and share.",
       "version": "0.2.0",
+      "license": "MIT"
+    },
+    {
+      "name": "kiko",
+      "source": "./kiko",
+      "description": "Kiko boxes every turn above your prompt: Knowledge In, Knowledge Out, K.O.!",
+      "version": "0.1.0",
       "license": "MIT"
     }
   ]

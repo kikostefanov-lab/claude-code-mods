@@ -1,3 +1,5 @@
+// Kiko's brain: the pure rules of a round (opponent names, knowledge in and out, the
+// band's clock, the record and the K.O. line), with no `$`, so the tests drive it directly.
 import type { BeatKind, KikoRecord, Mode, Round } from '../types'
 
 export const IDLE: Round = {
@@ -19,6 +21,7 @@ export function opponentName(text: string): string {
     .normalize('NFKD').replace(/[̀-ͯ]/g, '')
     .toLowerCase()
     .replace(/`[^`]*`/g, ' ')
+    .replace(/<\/?[a-z][\w-]*[^>]*>/g, ' ')
     .match(/[a-z][a-z0-9'-]*/g) ?? []
   const kept = words.filter(w => w.length > 1 && !STOP.has(w)).slice(0, 3)
   if (kept.length === 0) return 'THE UNKNOWN BUG'

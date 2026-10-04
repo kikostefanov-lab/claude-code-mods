@@ -14,6 +14,7 @@ describe('round', () => {
     expect(opponentName('Café menu broken')).toBe('THE CAFE MENU BROKEN')
     expect(opponentName('Think about what makes a good boxing nickname, then give me three')).toBe('THE GOOD BOXING NICKNAME')
     expect(opponentName('`x()` ??')).toBe('THE UNKNOWN BUG')
+    expect(opponentName('<task-notification>\n<summary>Background command "Watch CI" completed</summary>')).toBe('THE BACKGROUND COMMAND WATCH')
     expect(opponentName('')).toBe('THE UNKNOWN BUG')
     expect(opponentName('supercalifragilistic expialidocious antidisestablishmentarianism').length).toBeLessThanOrEqual(28)
   })

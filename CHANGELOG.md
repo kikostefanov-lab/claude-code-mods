@@ -2,6 +2,12 @@
 
 All notable changes to the mods in this repo. Versions follow the plugin manifest.
 
+## kiko 0.2.0 — 2026-10-10
+
+### Changed
+- New look: Kiko is a boxer with block-character gloves (`▄█(o.o)█▄`) working a punching bag, in place of the cat and the bug. The bag flashes and swings on a hit.
+- Code split by job: the round's rules (`round.ts`), the career record (`record.ts`), what Kiko says (`words.ts`), the art (`sprites.ts`) and the band's rows (`layout.ts`) are pure modules; `register.tsx` keeps everything that takes `$`. Type-checks clean under `strict`.
+
 ## kiko 0.1.0 — 2026-10-04
 
 - First release: Kiko boxes every turn in a band above the prompt. Knowledge In (reads, searches, fetches) are chomps, Knowledge Out (edits, writes) are punches, and the turn ends in a K.O. card and a transcript line.

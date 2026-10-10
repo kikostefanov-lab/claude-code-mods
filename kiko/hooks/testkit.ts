@@ -19,7 +19,7 @@ export function fakeHost(on: On, store: Record<string, unknown> = {}): Fake {
   const fake = { store: new Map(Object.entries(store)), registered: [], tools: [], commandSpecs: [], completeFails: false } as unknown as Fake
   fake.clock = mock.clock(on, { now: 1_760_000_000_000 })
   on('session.start', ($, e) => ({ cwd: e.cwd }))
-  on('command.register', ($, e) => { fake.registered.push(`command:${e.name}`); fake.commandSpecs.push(e as never); return v(undefined) })
+  on('command.register', ($, e) => { fake.registered.push(`command:${e.name}`); fake.commandSpecs.push(e as never); return v({ command: e.name }) })
   on('store.get', ($, e) => v(fake.store.get(e.key)))
   on('store.set', ($, e) => { fake.store.set(e.key, e.value); return v(undefined) })
   on('turn.start', ($, e) => ({ turnId: e.turnId }))
@@ -52,7 +52,7 @@ export async function step($: any, on: On, turnId: string, agentId?: string): Pr
 }
 
 export function stepSource(on: On): void {
-  on('turn.step', async function* ($, e) {
+  on('turn.step', async function* ($: unknown, e: { turnId: string; index: number }) {
     yield { kind: 'thinking', index: 0, text: 'hmm' }
     yield { kind: 'text', index: 1, text: 'Done.' }
     yield { kind: 'stop', stopReason: 'end_turn', usage: USAGE }

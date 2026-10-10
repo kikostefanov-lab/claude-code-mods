@@ -1,13 +1,13 @@
 // Kiko's brain: the pure rules of a round (opponent names, knowledge in and out, the
-// band's clock, the record and the K.O. line), with no `$`, so the tests drive it directly.
-import type { BeatKind, KikoRecord, Mode, Round } from '../types'
+// band's clock and each change a turn makes to the round), with no `$`, so the tests
+// drive it directly.
+import type { BeatKind, Mode, Round } from '../types'
+import { EMPTY_RECORD, recordLine } from './record'
 
 export const IDLE: Round = {
   phase: 'idle', n: 0, turnId: null, opponent: '', startedAt: 0, endedAt: null, mode: 'requesting', status: '',
-  tokensIn: 0, tokensOut: 0, reads: 0, writes: 0, seq: 0, beat: null, record: '0-0 | streak 0', frame: 0, beatAt: 0,
+  tokensIn: 0, tokensOut: 0, reads: 0, writes: 0, seq: 0, beat: null, record: recordLine(EMPTY_RECORD), frame: 0, beatAt: 0,
 }
-
-export const EMPTY_RECORD: KikoRecord = { wins: 0, streak: 0, bestStreak: 0, fastestMs: null, biggestTokens: 0, recent: [] }
 
 const STOP = new Set(`a an and are as at be by can could do does fix for from help how i in into is it its just let lets me
   my need now of on or our please should show so some tell than that the then this to up us want was we what when why will
@@ -38,7 +38,9 @@ const clip = (s: string, n = 20) => (s.length > n ? s.slice(0, n) : s)
 const ascii = (s: string) => s.replace(/[^\x20-\x7e]/gu, '?')
 const lastSegment = (p: string) => p.split(/[/\\]/).filter(Boolean).pop() ?? p
 
-export function classifyTool(tool: string, input: unknown): { kind: 'in' | 'out' | 'dodge'; label: string } {
+export type ToolKind = 'in' | 'out' | 'dodge'
+
+export function classifyTool(tool: string, input: unknown): { kind: ToolKind; label: string } {
   const args = (input ?? {}) as Record<string, unknown>
   const str = (k: string) => (typeof args[k] === 'string' ? (args[k] as string) : '')
   const path = str('file_path') || str('notebook_path') || str('path')
@@ -56,9 +58,9 @@ export function classifyTool(tool: string, input: unknown): { kind: 'in' | 'out'
   return { kind: 'dodge', label: clip(ascii(tool)) }
 }
 
-const BEAT: Record<'in' | 'out' | 'dodge', BeatKind> = { in: 'chomp', out: 'punch', dodge: 'dodge' }
+const BEAT: Record<ToolKind, BeatKind> = { in: 'chomp', out: 'punch', dodge: 'dodge' }
 
-export function beatFor(round: Round, kind: 'in' | 'out' | 'dodge', label: string, tool: string): Round {
+export function beatFor(round: Round, kind: ToolKind, label: string, tool: string): Round {
   const seq = round.seq + 1
   const status = kind === 'in' ? `reading ${label}` : kind === 'out' ? `editing ${label}` : `running ${tool}`
   return {
@@ -105,85 +107,41 @@ export function applyUsage(round: Round, usage: Usage): Round {
   }
 }
 
-export function updateRecord(rec: KikoRecord, fight: { ms: number; tokens: number; opponent: string }): KikoRecord {
-  const streak = rec.streak + 1
+// A round in progress, and when a turn is named, that turn's.
+export function isFighting(round: Round, turnId?: string): boolean {
+  return round.phase === 'fight' && (turnId === undefined || round.turnId === turnId)
+}
+
+// A new session keeps the round count and beat ids and shows the saved record.
+export function freshSession(round: Round, record: string): Round {
+  return { ...IDLE, n: round.n, seq: round.seq, record }
+}
+
+export function startFight(prev: Round, fight: { turnId: string; opponent: string; now: number; record: string }): Round {
+  const seq = prev.seq + 1
   return {
-    wins: rec.wins + 1,
-    streak,
-    bestStreak: Math.max(rec.bestStreak, streak),
-    fastestMs: rec.fastestMs === null ? fight.ms : Math.min(rec.fastestMs, fight.ms),
-    biggestTokens: Math.max(rec.biggestTokens, fight.tokens),
-    recent: [fight.opponent, ...rec.recent].slice(0, 5),
+    ...IDLE, n: prev.n + 1, seq, turnId: fight.turnId, phase: 'fight', opponent: fight.opponent, startedAt: fight.now,
+    status: 'touching gloves', beat: { id: seq, kind: 'bell', label: '' }, record: fight.record,
   }
 }
 
-export function isKikoRecord(v: unknown): v is KikoRecord {
-  const r = v as KikoRecord | undefined
-  return Boolean(r) && typeof r!.wins === 'number' && typeof r!.streak === 'number' && typeof r!.bestStreak === 'number' &&
-    typeof r!.biggestTokens === 'number' && Array.isArray(r!.recent)
+export function withMode(round: Round, turnId: string, mode: Mode): Round {
+  return isFighting(round, turnId) && round.mode !== mode ? { ...round, mode, status: '' } : round
 }
 
-
-
-export function mmss(ms: number): string {
-  const s = Math.max(0, Math.floor(ms / 1000))
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+export function withUsage(round: Round, turnId: string, usage: Usage): Round {
+  return isFighting(round, turnId) ? applyUsage(round, usage) : round
 }
 
-export function fmtTokens(n: number): string {
-  if (n < 1000) return String(n)
-  if (n < 1_000_000) return `${(n / 1000).toFixed(1)}k`
-  return `${(n / 1_000_000).toFixed(1)}M`
+// Back to waiting on the model once a tool has answered.
+export function afterTool(round: Round): Round {
+  return isFighting(round) ? { ...round, mode: 'requesting', status: '' } : round
 }
 
-export function recordLine(rec: KikoRecord): string {
-  return `${rec.wins}-0 | streak ${rec.streak}`
+export function knockOut(round: Round, now: number, record: string): Round {
+  return { ...round, phase: 'ko', endedAt: now, record, status: 'K.O.!' }
 }
 
-export function koLine(round: Round, rec: KikoRecord): string {
-  const took = mmss((round.endedAt ?? round.startedAt) - round.startedAt)
-  return `K.O. ▸ Kiko beats ${round.opponent} in ${took} · read ${round.reads} · wrote ${round.writes} · ` +
-    `${fmtTokens(round.tokensIn)} in / ${fmtTokens(round.tokensOut)} out · ${rec.wins}-0`
+export function stopFight(round: Round): Round {
+  return { ...round, phase: 'idle' }
 }
-
-export function oneLine(round: Round): string {
-  return `ROUND ${round.n} · KIKO vs. ${round.opponent} · KI ${fmtTokens(round.tokensIn)} · KO ${fmtTokens(round.tokensOut)}`
-}
-
-export function statsText(rec: KikoRecord): string {
-  return [
-    `**Kiko's record: ${rec.wins}-0**`,
-    '',
-    `- Streak: ${rec.streak} (best ${rec.bestStreak})`,
-    `- Fastest K.O.: ${rec.fastestMs === null ? 'none yet' : mmss(rec.fastestMs)}`,
-    `- Biggest K.O.: ${fmtTokens(rec.biggestTokens)} tokens`,
-    `- Last opponents: ${rec.recent.length ? rec.recent.join(', ') : 'none yet'}`,
-  ].join('\n')
-}
-
-export type SpinnerKind = 'thinking' | 'in' | 'out' | 'responding' | 'tool' | 'requesting'
-
-export function spinnerKind(engineMode: string, round: Round): SpinnerKind {
-  if (engineMode === 'thinking') return 'thinking'
-  if (engineMode === 'responding') return 'responding'
-  if (engineMode === 'tool-use' || engineMode === 'tool-input') {
-    return round.beat?.kind === 'chomp' ? 'in' : round.beat?.kind === 'punch' ? 'out' : 'tool'
-  }
-  return 'requesting'
-}
-
-const WORDS: Record<SpinnerKind, readonly string[]> = {
-  thinking: ['Kikonsidering', 'Sizing up the opponent', 'Plotting the combo', 'Reading the ring'],
-  in: ['Chomping knowledge', 'Knowledge in', 'Studying the tape', 'Nom-nom-noting'],
-  out: ['Winding up the KO', 'Knowledge out', 'Landing the uppercut', 'Jab, jab, cross'],
-  responding: ['Trash-talking', 'Ringside commentary', 'Calling the shot', 'Talking the talk'],
-  tool: ['Bobbing and weaving', 'Footwork', 'Working the corner', 'Kiko-ing'],
-  requesting: ['Kiko-ing', 'Touching gloves', 'Circling', 'Bouncing on toes'],
-}
-
-export function spinnerWord(kind: SpinnerKind, n: number): string {
-  const words = WORDS[kind]
-  return words[Math.abs(n) % words.length]!
-}
-
-export type { Mode }

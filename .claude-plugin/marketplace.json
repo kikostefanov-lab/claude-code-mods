@@ -19,7 +19,7 @@
       "name": "kiko",
       "source": "./kiko",
       "description": "Kiko boxes every turn above your prompt: Knowledge In, Knowledge Out, K.O.!",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "license": "MIT"
     }
   ]

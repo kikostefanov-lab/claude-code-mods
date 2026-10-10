@@ -9,7 +9,7 @@ Experiments with **Claude Code mods**: plugins of function hooks that add live p
 | Mod | What it does |
 |---|---|
 | [`whiteboard/`](whiteboard) | Gives Claude a `draw` tool: Mermaid, D2 and PlantUML diagrams rendered locally and shown in a side pane, with history, versions, export, copy and share. |
-| [`kiko/`](kiko) | **K**nowledge **I**n, **K**nowledge **O**ut: a TUI critter boxes every turn above your prompt, chomping what Claude reads, punching with what it writes, and finishing with a K.O. |
+| [`kiko/`](kiko) | **K**nowledge **I**n, **K**nowledge **O**ut: a TUI boxer works the bag every turn above your prompt, grabbing what Claude reads, punching with what it writes, and finishing with a K.O. |
 
 ---
 
@@ -143,7 +143,7 @@ whiteboard/
 ```bash
 claude plugin validate whiteboard   # what the engine will load, call and refuse
 claude plugin test whiteboard       # 85 tests across terminal, desktop and mobile
-claude plugin test kiko             # 36 tests: round logic, sprites, the band on every surface
+claude plugin test kiko             # 43 tests: round logic, sprites, the band on every surface
 whiteboard/scripts/smoke-mmdc.sh    # real mmdc: SVG size limit, PNG, syntax errors
 ```
 
@@ -164,14 +164,14 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md).
 ```
  ROUND 3 ── KIKO vs. THE FLAKY AUTH TEST ─────────────── 0:42
  KI █████████░░░ 12.4k                     KO ████████░░░░ 2.1k
-                /\_/\                         ,_,
-   [app.ts]›››( O.O )         {fix.ts}      (x_x)
-                /| |=>              ‹ jab!   \ /
+                .---.                                  ┌┴┐
+   [app.ts]›››▄█(>.<)==█▄          {fix.ts}            │░│
+                 /  \                       ‹ jab!     └─┘
  > reading app.ts
 ```
 
 - **Rounds**: "ROUND n ── FIGHT!" when a turn starts; the opponent is named from your prompt.
-- **Moves**: swirly eyes while Claude thinks, talking while it replies, a **chomp** (`[file]›››`) for every read, search or fetch, a **punch** (`{file}` → `(x_x)`) for every edit or write, a dodge for other tools.
+- **Moves**: swirly eyes while Claude thinks, talking while it replies, a **grab** (`[file]›››`, gloves open) for every read, search or fetch, a **punch** (`{file}` into the bag, which flashes and swings) for every edit or write, a dodge for other tools.
 - **Bars**: KI is new input tokens, KO is output tokens (log scale).
 - **K.O.**: a 3-row card for 5 seconds, plus a `K.O. ▸ …` notice in the transcript (the terminal shows it; the desktop doesn't display notices yet).
 - **Career record** across sessions: `/kiko stats` (wins, streak, fastest and biggest K.O., last opponents).
